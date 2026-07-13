@@ -1,0 +1,971 @@
+==============================================================
+              Spring Core and Maven - Practice
+==============================================================
+
+
+==============================================================
+Exercise 1: Configuring a Basic Spring Application
+==============================================================
+
+Program:
+--------
+
+File: pom.xml
+-------------
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+    <modelVersion>4.0.0</modelVersion>
+    <groupId>com.library</groupId>
+    <artifactId>LibraryManagement</artifactId>
+    <version>1.0-SNAPSHOT</version>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-context</artifactId>
+            <version>5.3.20</version>
+        </dependency>
+    </dependencies>
+</project>
+
+
+File: src/main/resources/applicationContext.xml
+-----------------------------------------------
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+                           http://www.springframework.org/schema/beans/spring-beans.xsd">
+
+    <!-- define beans for repository and service -->
+    <bean id="bookRepository" class="com.library.repository.BookRepository" />
+    <bean id="bookService" class="com.library.service.BookService" />
+
+</beans>
+
+
+File: com/library/repository/BookRepository.java
+------------------------------------------------
+package com.library.repository;
+
+// simple repository class
+public class BookRepository {
+
+    public String findBook(int id) {
+        return "Book with id " + id;
+    }
+}
+
+
+File: com/library/service/BookService.java
+------------------------------------------
+package com.library.service;
+
+// simple service class
+public class BookService {
+
+    public void showMessage() {
+        System.out.println("BookService is running.");
+    }
+}
+
+
+File: com/library/LibraryManagementApplication.java
+---------------------------------------------------
+package com.library;
+
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.support.ClassPathXmlApplicationContext;
+import com.library.service.BookService;
+
+// main class to load the Spring context
+public class LibraryManagementApplication {
+
+    public static void main(String[] args) {
+
+        ApplicationContext context =
+            new ClassPathXmlApplicationContext("applicationContext.xml");
+
+        BookService service = (BookService) context.getBean("bookService");
+        service.showMessage();
+    }
+}
+
+Output:
+-------
+INFO: Loading XML bean definitions from class path resource [applicationContext.xml]
+INFO: Refreshing org.springframework.context.support.ClassPathXmlApplicationContext@6a4f787b
+BookService is running.
+
+
+
+==============================================================
+Exercise 2: Implementing Dependency Injection
+==============================================================
+
+Program:
+--------
+
+File: src/main/resources/applicationContext.xml
+-----------------------------------------------
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+                           http://www.springframework.org/schema/beans/spring-beans.xsd">
+
+    <bean id="bookRepository" class="com.library.repository.BookRepository" />
+
+    <!-- wire bookRepository into bookService using setter injection -->
+    <bean id="bookService" class="com.library.service.BookService">
+        <property name="bookRepository" ref="bookRepository" />
+    </bean>
+
+</beans>
+
+
+File: com/library/repository/BookRepository.java
+------------------------------------------------
+package com.library.repository;
+
+public class BookRepository {
+
+    public String findBook(int id) {
+        return "Book with id " + id + " - Effective Java";
+    }
+}
+
+
+File: com/library/service/BookService.java
+------------------------------------------
+package com.library.service;
+
+import com.library.repository.BookRepository;
+
+public class BookService {
+
+    // dependency reference
+    private BookRepository bookRepository;
+
+    // setter method used by Spring for injection
+    public void setBookRepository(BookRepository bookRepository) {
+        this.bookRepository = bookRepository;
+    }
+
+    public void showBook(int id) {
+        String book = bookRepository.findBook(id);
+        System.out.println("Found: " + book);
+    }
+}
+
+
+File: com/library/LibraryManagementApplication.java
+---------------------------------------------------
+package com.library;
+
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.support.ClassPathXmlApplicationContext;
+import com.library.service.BookService;
+
+public class LibraryManagementApplication {
+
+    public static void main(String[] args) {
+
+        ApplicationContext context =
+            new ClassPathXmlApplicationContext("applicationContext.xml");
+
+        BookService service = (BookService) context.getBean("bookService");
+        service.showBook(101);
+    }
+}
+
+Output:
+-------
+INFO: Loading XML bean definitions from class path resource [applicationContext.xml]
+INFO: Refreshing org.springframework.context.support.ClassPathXmlApplicationContext@6a4f787b
+Found: Book with id 101 - Effective Java
+
+
+
+==============================================================
+Exercise 3: Implementing Logging with Spring AOP
+==============================================================
+
+Program:
+--------
+
+File: pom.xml (add these dependencies)
+--------------------------------------
+<dependency>
+    <groupId>org.springframework</groupId>
+    <artifactId>spring-context</artifactId>
+    <version>5.3.20</version>
+</dependency>
+<dependency>
+    <groupId>org.springframework</groupId>
+    <artifactId>spring-aop</artifactId>
+    <version>5.3.20</version>
+</dependency>
+<dependency>
+    <groupId>org.aspectj</groupId>
+    <artifactId>aspectjweaver</artifactId>
+    <version>1.9.7</version>
+</dependency>
+
+
+File: src/main/resources/applicationContext.xml
+-----------------------------------------------
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:aop="http://www.springframework.org/schema/aop"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+                           http://www.springframework.org/schema/beans/spring-beans.xsd
+                           http://www.springframework.org/schema/aop
+                           http://www.springframework.org/schema/aop/spring-aop.xsd">
+
+    <!-- enable AspectJ auto proxy -->
+    <aop:aspectj-autoproxy />
+
+    <bean id="bookRepository" class="com.library.repository.BookRepository" />
+    <bean id="bookService" class="com.library.service.BookService">
+        <property name="bookRepository" ref="bookRepository" />
+    </bean>
+
+    <!-- register the aspect -->
+    <bean id="loggingAspect" class="com.library.aspect.LoggingAspect" />
+
+</beans>
+
+
+File: com/library/aspect/LoggingAspect.java
+-------------------------------------------
+package com.library.aspect;
+
+import org.aspectj.lang.ProceedingJoinPoint;
+import org.aspectj.lang.annotation.Around;
+import org.aspectj.lang.annotation.Aspect;
+
+// aspect that logs the execution time of service methods
+@Aspect
+public class LoggingAspect {
+
+    @Around("execution(* com.library.service.*.*(..))")
+    public Object logExecutionTime(ProceedingJoinPoint pjp) throws Throwable {
+
+        long start = System.currentTimeMillis();
+
+        // proceed with the actual method
+        Object result = pjp.proceed();
+
+        long end = System.currentTimeMillis();
+
+        System.out.println("Method " + pjp.getSignature().getName() +
+                           " executed in " + (end - start) + " ms");
+        return result;
+    }
+}
+
+
+File: com/library/LibraryManagementApplication.java
+---------------------------------------------------
+package com.library;
+
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.support.ClassPathXmlApplicationContext;
+import com.library.service.BookService;
+
+public class LibraryManagementApplication {
+
+    public static void main(String[] args) {
+
+        ApplicationContext context =
+            new ClassPathXmlApplicationContext("applicationContext.xml");
+
+        BookService service = (BookService) context.getBean("bookService");
+        service.showBook(101);
+    }
+}
+
+Output:
+-------
+INFO: Refreshing org.springframework.context.support.ClassPathXmlApplicationContext@6a4f787b
+Found: Book with id 101 - Effective Java
+Method showBook executed in 12 ms
+
+
+
+==============================================================
+Exercise 4: Creating and Configuring a Maven Project
+==============================================================
+
+Program:
+--------
+
+File: pom.xml
+-------------
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+
+    <modelVersion>4.0.0</modelVersion>
+    <groupId>com.library</groupId>
+    <artifactId>LibraryManagement</artifactId>
+    <version>1.0-SNAPSHOT</version>
+    <packaging>jar</packaging>
+
+    <properties>
+        <maven.compiler.source>1.8</maven.compiler.source>
+        <maven.compiler.target>1.8</maven.compiler.target>
+    </properties>
+
+    <dependencies>
+        <!-- Spring Context -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-context</artifactId>
+            <version>5.3.20</version>
+        </dependency>
+
+        <!-- Spring AOP -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-aop</artifactId>
+            <version>5.3.20</version>
+        </dependency>
+
+        <!-- Spring Web MVC -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-webmvc</artifactId>
+            <version>5.3.20</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- Maven Compiler Plugin for Java 1.8 -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.8.1</version>
+                <configuration>
+                    <source>1.8</source>
+                    <target>1.8</target>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>
+
+Output:
+-------
+$ mvn clean install
+
+[INFO] Scanning for projects...
+[INFO] Building LibraryManagement 1.0-SNAPSHOT
+[INFO] --- maven-compiler-plugin:3.8.1:compile (default-compile) ---
+[INFO] Changes detected - recompiling the module!
+[INFO] Compiling source files to /LibraryManagement/target/classes
+[INFO] BUILD SUCCESS
+[INFO] Total time:  4.582 s
+
+
+
+==============================================================
+Exercise 5: Configuring the Spring IoC Container
+==============================================================
+
+Program:
+--------
+
+File: src/main/resources/applicationContext.xml
+-----------------------------------------------
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+                           http://www.springframework.org/schema/beans/spring-beans.xsd">
+
+    <!-- central bean definitions for the application -->
+    <bean id="bookRepository" class="com.library.repository.BookRepository" />
+
+    <bean id="bookService" class="com.library.service.BookService">
+        <property name="bookRepository" ref="bookRepository" />
+    </bean>
+
+</beans>
+
+
+File: com/library/repository/BookRepository.java
+------------------------------------------------
+package com.library.repository;
+
+public class BookRepository {
+    public String findBook(int id) {
+        return "Book with id " + id;
+    }
+}
+
+
+File: com/library/service/BookService.java
+------------------------------------------
+package com.library.service;
+
+import com.library.repository.BookRepository;
+
+public class BookService {
+
+    private BookRepository bookRepository;
+
+    public void setBookRepository(BookRepository bookRepository) {
+        this.bookRepository = bookRepository;
+    }
+
+    public void listBook(int id) {
+        System.out.println(bookRepository.findBook(id));
+    }
+}
+
+
+File: com/library/LibraryManagementApplication.java
+---------------------------------------------------
+package com.library;
+
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.support.ClassPathXmlApplicationContext;
+import com.library.service.BookService;
+
+public class LibraryManagementApplication {
+
+    public static void main(String[] args) {
+
+        ApplicationContext context =
+            new ClassPathXmlApplicationContext("applicationContext.xml");
+
+        BookService service = (BookService) context.getBean("bookService");
+        service.listBook(1);
+        service.listBook(2);
+    }
+}
+
+Output:
+-------
+Book with id 1
+Book with id 2
+
+
+
+==============================================================
+Exercise 6: Configuring Beans with Annotations
+==============================================================
+
+Program:
+--------
+
+File: src/main/resources/applicationContext.xml
+-----------------------------------------------
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+                           http://www.springframework.org/schema/beans/spring-beans.xsd
+                           http://www.springframework.org/schema/context
+                           http://www.springframework.org/schema/context/spring-context.xsd">
+
+    <!-- scan the com.library package for annotated classes -->
+    <context:component-scan base-package="com.library" />
+
+</beans>
+
+
+File: com/library/repository/BookRepository.java
+------------------------------------------------
+package com.library.repository;
+
+import org.springframework.stereotype.Repository;
+
+// @Repository tells Spring to create a bean of this class
+@Repository
+public class BookRepository {
+
+    public String findBook(int id) {
+        return "Book with id " + id;
+    }
+}
+
+
+File: com/library/service/BookService.java
+------------------------------------------
+package com.library.service;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import com.library.repository.BookRepository;
+
+// @Service tells Spring to create a bean of this class
+@Service
+public class BookService {
+
+    @Autowired
+    private BookRepository bookRepository;
+
+    public void showBook(int id) {
+        System.out.println("From service: " + bookRepository.findBook(id));
+    }
+}
+
+
+File: com/library/LibraryManagementApplication.java
+---------------------------------------------------
+package com.library;
+
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.support.ClassPathXmlApplicationContext;
+import com.library.service.BookService;
+
+public class LibraryManagementApplication {
+
+    public static void main(String[] args) {
+
+        ApplicationContext context =
+            new ClassPathXmlApplicationContext("applicationContext.xml");
+
+        BookService service = context.getBean(BookService.class);
+        service.showBook(101);
+    }
+}
+
+Output:
+-------
+From service: Book with id 101
+
+
+
+==============================================================
+Exercise 7: Implementing Constructor and Setter Injection
+==============================================================
+
+Program:
+--------
+
+File: src/main/resources/applicationContext.xml
+-----------------------------------------------
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+                           http://www.springframework.org/schema/beans/spring-beans.xsd">
+
+    <bean id="bookRepository" class="com.library.repository.BookRepository" />
+
+    <bean id="bookService" class="com.library.service.BookService">
+        <!-- constructor injection -->
+        <constructor-arg ref="bookRepository" />
+        <!-- setter injection for another property -->
+        <property name="libraryName" value="Central Library" />
+    </bean>
+
+</beans>
+
+
+File: com/library/repository/BookRepository.java
+------------------------------------------------
+package com.library.repository;
+
+public class BookRepository {
+    public String findBook(int id) {
+        return "Book with id " + id;
+    }
+}
+
+
+File: com/library/service/BookService.java
+------------------------------------------
+package com.library.service;
+
+import com.library.repository.BookRepository;
+
+public class BookService {
+
+    // required dependency - injected via constructor
+    private BookRepository bookRepository;
+
+    // optional property - injected via setter
+    private String libraryName;
+
+    // constructor injection
+    public BookService(BookRepository bookRepository) {
+        this.bookRepository = bookRepository;
+        System.out.println("BookService created with BookRepository");
+    }
+
+    // setter injection
+    public void setLibraryName(String libraryName) {
+        this.libraryName = libraryName;
+    }
+
+    public void listBook(int id) {
+        System.out.println(libraryName + " -> " + bookRepository.findBook(id));
+    }
+}
+
+
+File: com/library/LibraryManagementApplication.java
+---------------------------------------------------
+package com.library;
+
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.support.ClassPathXmlApplicationContext;
+import com.library.service.BookService;
+
+public class LibraryManagementApplication {
+
+    public static void main(String[] args) {
+
+        ApplicationContext context =
+            new ClassPathXmlApplicationContext("applicationContext.xml");
+
+        BookService service = (BookService) context.getBean("bookService");
+        service.listBook(101);
+    }
+}
+
+Output:
+-------
+BookService created with BookRepository
+Central Library -> Book with id 101
+
+
+
+==============================================================
+Exercise 8: Implementing Basic AOP with Spring
+==============================================================
+
+Program:
+--------
+
+File: src/main/resources/applicationContext.xml
+-----------------------------------------------
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:aop="http://www.springframework.org/schema/aop"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+                           http://www.springframework.org/schema/beans/spring-beans.xsd
+                           http://www.springframework.org/schema/aop
+                           http://www.springframework.org/schema/aop/spring-aop.xsd
+                           http://www.springframework.org/schema/context
+                           http://www.springframework.org/schema/context/spring-context.xsd">
+
+    <context:component-scan base-package="com.library" />
+
+    <!-- enable AspectJ auto proxying -->
+    <aop:aspectj-autoproxy />
+
+</beans>
+
+
+File: com/library/aspect/LoggingAspect.java
+-------------------------------------------
+package com.library.aspect;
+
+import org.aspectj.lang.JoinPoint;
+import org.aspectj.lang.annotation.After;
+import org.aspectj.lang.annotation.Aspect;
+import org.aspectj.lang.annotation.Before;
+import org.springframework.stereotype.Component;
+
+// aspect with before and after advice
+@Aspect
+@Component
+public class LoggingAspect {
+
+    @Before("execution(* com.library.service.*.*(..))")
+    public void logBefore(JoinPoint jp) {
+        System.out.println("[BEFORE] " + jp.getSignature().getName() + " called");
+    }
+
+    @After("execution(* com.library.service.*.*(..))")
+    public void logAfter(JoinPoint jp) {
+        System.out.println("[AFTER ] " + jp.getSignature().getName() + " finished");
+    }
+}
+
+
+File: com/library/repository/BookRepository.java
+------------------------------------------------
+package com.library.repository;
+
+import org.springframework.stereotype.Repository;
+
+@Repository
+public class BookRepository {
+    public String findBook(int id) {
+        return "Book with id " + id;
+    }
+}
+
+
+File: com/library/service/BookService.java
+------------------------------------------
+package com.library.service;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import com.library.repository.BookRepository;
+
+@Service
+public class BookService {
+
+    @Autowired
+    private BookRepository bookRepository;
+
+    public void showBook(int id) {
+        System.out.println("Result: " + bookRepository.findBook(id));
+    }
+}
+
+
+File: com/library/LibraryManagementApplication.java
+---------------------------------------------------
+package com.library;
+
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.support.ClassPathXmlApplicationContext;
+import com.library.service.BookService;
+
+public class LibraryManagementApplication {
+
+    public static void main(String[] args) {
+
+        ApplicationContext context =
+            new ClassPathXmlApplicationContext("applicationContext.xml");
+
+        BookService service = context.getBean(BookService.class);
+        service.showBook(101);
+    }
+}
+
+Output:
+-------
+[BEFORE] showBook called
+Result: Book with id 101
+[AFTER ] showBook finished
+
+
+
+==============================================================
+Exercise 9: Creating a Spring Boot Application
+==============================================================
+
+Program:
+--------
+
+File: pom.xml
+-------------
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>2.7.5</version>
+    </parent>
+
+    <groupId>com.library</groupId>
+    <artifactId>LibraryManagement</artifactId>
+    <version>1.0-SNAPSHOT</version>
+
+    <properties>
+        <java.version>1.8</java.version>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+    </dependencies>
+</project>
+
+
+File: src/main/resources/application.properties
+-----------------------------------------------
+# H2 in-memory database configuration
+spring.datasource.url=jdbc:h2:mem:librarydb
+spring.datasource.driverClassName=org.h2.Driver
+spring.datasource.username=sa
+spring.datasource.password=
+
+spring.jpa.database-platform=org.hibernate.dialect.H2Dialect
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.show-sql=true
+
+# enable H2 console at http://localhost:8080/h2-console
+spring.h2.console.enabled=true
+
+
+File: com/library/entity/Book.java
+----------------------------------
+package com.library.entity;
+
+import javax.persistence.Entity;
+import javax.persistence.GeneratedValue;
+import javax.persistence.GenerationType;
+import javax.persistence.Id;
+
+// JPA entity representing a book
+@Entity
+public class Book {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    private String title;
+    private String author;
+
+    public Book() {}
+
+    public Book(String title, String author) {
+        this.title = title;
+        this.author = author;
+    }
+
+    public Long getId() { return id; }
+    public String getTitle() { return title; }
+    public String getAuthor() { return author; }
+
+    public void setTitle(String title) { this.title = title; }
+    public void setAuthor(String author) { this.author = author; }
+}
+
+
+File: com/library/repository/BookRepository.java
+------------------------------------------------
+package com.library.repository;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import com.library.entity.Book;
+
+// JpaRepository gives us CRUD methods for free
+public interface BookRepository extends JpaRepository<Book, Long> {
+}
+
+
+File: com/library/controller/BookController.java
+------------------------------------------------
+package com.library.controller;
+
+import java.util.List;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.*;
+
+import com.library.entity.Book;
+import com.library.repository.BookRepository;
+
+// REST controller with CRUD endpoints
+@RestController
+@RequestMapping("/books")
+public class BookController {
+
+    @Autowired
+    private BookRepository bookRepository;
+
+    @GetMapping
+    public List<Book> getAllBooks() {
+        return bookRepository.findAll();
+    }
+
+    @GetMapping("/{id}")
+    public Book getBook(@PathVariable Long id) {
+        return bookRepository.findById(id).orElse(null);
+    }
+
+    @PostMapping
+    public Book addBook(@RequestBody Book book) {
+        return bookRepository.save(book);
+    }
+
+    @PutMapping("/{id}")
+    public Book updateBook(@PathVariable Long id, @RequestBody Book book) {
+        book.setTitle(book.getTitle());
+        book.setAuthor(book.getAuthor());
+        return bookRepository.save(book);
+    }
+
+    @DeleteMapping("/{id}")
+    public String deleteBook(@PathVariable Long id) {
+        bookRepository.deleteById(id);
+        return "Book with id " + id + " deleted.";
+    }
+}
+
+
+File: com/library/LibraryManagementApplication.java
+---------------------------------------------------
+package com.library;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+// main Spring Boot class
+@SpringBootApplication
+public class LibraryManagementApplication {
+
+    public static void main(String[] args) {
+        SpringApplication.run(LibraryManagementApplication.class, args);
+    }
+}
+
+Output:
+-------
+(Console when the application starts)
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+ :: Spring Boot ::                (v2.7.5)
+
+Tomcat started on port(s): 8080 (http)
+Started LibraryManagementApplication in 3.421 seconds
+
+
+(Testing the REST endpoints using a browser or Postman)
+
+POST http://localhost:8080/books
+Body: {"title": "Effective Java", "author": "Joshua Bloch"}
+Response: {"id": 1, "title": "Effective Java", "author": "Joshua Bloch"}
+
+POST http://localhost:8080/books
+Body: {"title": "Clean Code", "author": "Robert Martin"}
+Response: {"id": 2, "title": "Clean Code", "author": "Robert Martin"}
+
+GET http://localhost:8080/books
+Response:
+[
+    {"id": 1, "title": "Effective Java", "author": "Joshua Bloch"},
+    {"id": 2, "title": "Clean Code", "author": "Robert Martin"}
+]
+
+GET http://localhost:8080/books/1
+Response: {"id": 1, "title": "Effective Java", "author": "Joshua Bloch"}
+
+DELETE http://localhost:8080/books/2
+Response: Book with id 2 deleted.

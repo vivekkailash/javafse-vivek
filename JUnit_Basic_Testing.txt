@@ -1,0 +1,278 @@
+==============================================================
+                JUnit Basic Testing - Practice
+==============================================================
+
+
+==============================================================
+Exercise 1: Setting Up JUnit
+==============================================================
+
+Program:
+--------
+
+File: pom.xml
+-------------
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+    <modelVersion>4.0.0</modelVersion>
+    <groupId>com.practice</groupId>
+    <artifactId>junit-demo</artifactId>
+    <version>1.0-SNAPSHOT</version>
+
+    <dependencies>
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <version>4.13.2</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>
+
+
+File: SampleTest.java
+---------------------
+import org.junit.Test;
+import static org.junit.Assert.assertEquals;
+
+// first test class to check that JUnit setup is working
+public class SampleTest {
+
+    @Test
+    public void testJunitSetup() {
+        // simple assertion to confirm setup
+        assertEquals(4, 2 + 2);
+        System.out.println("JUnit is working fine.");
+    }
+}
+
+Output:
+-------
+JUnit is working fine.
+
+Test Passed: testJunitSetup
+Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+
+
+
+==============================================================
+Exercise 2: Writing Basic JUnit Tests
+==============================================================
+
+Program:
+--------
+
+File: Calculator.java
+---------------------
+// simple class with methods to test
+public class Calculator {
+
+    public int add(int a, int b) {
+        return a + b;
+    }
+
+    public int subtract(int a, int b) {
+        return a - b;
+    }
+
+    public int multiply(int a, int b) {
+        return a * b;
+    }
+
+    public int divide(int a, int b) {
+        if (b == 0) {
+            throw new ArithmeticException("Cannot divide by zero");
+        }
+        return a / b;
+    }
+}
+
+
+File: CalculatorTest.java
+-------------------------
+import org.junit.Test;
+import static org.junit.Assert.assertEquals;
+
+// tests for the Calculator class
+public class CalculatorTest {
+
+    @Test
+    public void testAdd() {
+        Calculator calc = new Calculator();
+        assertEquals(10, calc.add(4, 6));
+    }
+
+    @Test
+    public void testSubtract() {
+        Calculator calc = new Calculator();
+        assertEquals(5, calc.subtract(10, 5));
+    }
+
+    @Test
+    public void testMultiply() {
+        Calculator calc = new Calculator();
+        assertEquals(12, calc.multiply(3, 4));
+    }
+
+    @Test
+    public void testDivide() {
+        Calculator calc = new Calculator();
+        assertEquals(4, calc.divide(20, 5));
+    }
+}
+
+Output:
+-------
+Test Passed: testAdd
+Test Passed: testSubtract
+Test Passed: testMultiply
+Test Passed: testDivide
+
+Tests run: 4, Failures: 0, Errors: 0, Skipped: 0
+
+
+
+==============================================================
+Exercise 3: Assertions in JUnit
+==============================================================
+
+Program:
+--------
+
+File: AssertionsTest.java
+-------------------------
+import org.junit.Test;
+import static org.junit.Assert.*;
+
+// demo of different JUnit assertions
+public class AssertionsTest {
+
+    @Test
+    public void testAssertions() {
+
+        // assertEquals - checks if two values are equal
+        assertEquals(5, 2 + 3);
+
+        // assertTrue - checks if condition is true
+        assertTrue(5 > 3);
+
+        // assertFalse - checks if condition is false
+        assertFalse(5 < 3);
+
+        // assertNull - checks if reference is null
+        assertNull(null);
+
+        // assertNotNull - checks if reference is not null
+        assertNotNull(new Object());
+
+        // assertArrayEquals - checks if arrays are equal
+        int[] expected = {1, 2, 3};
+        int[] actual = {1, 2, 3};
+        assertArrayEquals(expected, actual);
+
+        System.out.println("All assertions passed.");
+    }
+}
+
+Output:
+-------
+All assertions passed.
+
+Test Passed: testAssertions
+Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+
+
+
+==============================================================
+Exercise 4: AAA Pattern, Setup and Teardown
+==============================================================
+
+Program:
+--------
+
+File: BankAccount.java
+----------------------
+// class under test
+public class BankAccount {
+
+    private double balance;
+
+    public BankAccount(double initialBalance) {
+        this.balance = initialBalance;
+    }
+
+    public void deposit(double amount) {
+        balance = balance + amount;
+    }
+
+    public void withdraw(double amount) {
+        if (amount > balance) {
+            throw new IllegalArgumentException("Insufficient funds");
+        }
+        balance = balance - amount;
+    }
+
+    public double getBalance() {
+        return balance;
+    }
+}
+
+
+File: BankAccountTest.java
+--------------------------
+import org.junit.Before;
+import org.junit.After;
+import org.junit.Test;
+import static org.junit.Assert.assertEquals;
+
+// tests using AAA pattern and setup/teardown
+public class BankAccountTest {
+
+    private BankAccount account;
+
+    @Before
+    public void setUp() {
+        // runs before every test
+        System.out.println("Setup: creating a fresh account");
+        account = new BankAccount(1000.0);
+    }
+
+    @After
+    public void tearDown() {
+        // runs after every test
+        System.out.println("Teardown: cleaning up");
+        account = null;
+    }
+
+    @Test
+    public void testDeposit() {
+        // Arrange - done in setUp
+
+        // Act
+        account.deposit(500);
+
+        // Assert
+        assertEquals(1500.0, account.getBalance(), 0.001);
+    }
+
+    @Test
+    public void testWithdraw() {
+        // Arrange - done in setUp
+
+        // Act
+        account.withdraw(300);
+
+        // Assert
+        assertEquals(700.0, account.getBalance(), 0.001);
+    }
+}
+
+Output:
+-------
+Setup: creating a fresh account
+Teardown: cleaning up
+Setup: creating a fresh account
+Teardown: cleaning up
+
+Test Passed: testDeposit
+Test Passed: testWithdraw
+Tests run: 2, Failures: 0, Errors: 0, Skipped: 0

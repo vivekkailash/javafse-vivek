@@ -1,0 +1,340 @@
+==============================================================
+                   Mockito - Practice
+==============================================================
+
+
+Note: All exercises use the same helper classes below.
+
+File: ExternalApi.java
+----------------------
+// external API that MyService depends on
+public interface ExternalApi {
+    String getData();
+    String getDataById(int id);
+    void sendData(String data);
+}
+
+
+File: MyService.java
+--------------------
+// service class under test
+public class MyService {
+
+    private ExternalApi api;
+
+    public MyService(ExternalApi api) {
+        this.api = api;
+    }
+
+    public String fetchData() {
+        return api.getData();
+    }
+
+    public String fetchDataById(int id) {
+        return api.getDataById(id);
+    }
+
+    public void pushData(String data) {
+        api.sendData(data);
+    }
+}
+
+
+
+==============================================================
+Exercise 1: Mocking and Stubbing
+==============================================================
+
+Program:
+--------
+
+File: MyServiceTest.java
+------------------------
+import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+
+public class MyServiceTest {
+
+    @Test
+    public void testExternalApi() {
+
+        // create a mock object for the external API
+        ExternalApi mockApi = Mockito.mock(ExternalApi.class);
+
+        // stub the method to return a predefined value
+        when(mockApi.getData()).thenReturn("Mock Data");
+
+        // use the mock in the service
+        MyService service = new MyService(mockApi);
+        String result = service.fetchData();
+
+        // check that the service returned the mocked value
+        assertEquals("Mock Data", result);
+    }
+}
+
+Output:
+-------
+Test Passed: testExternalApi
+Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+
+
+
+==============================================================
+Exercise 2: Verifying Interactions
+==============================================================
+
+Program:
+--------
+
+File: MyServiceTest.java
+------------------------
+import static org.mockito.Mockito.*;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+
+public class MyServiceTest {
+
+    @Test
+    public void testVerifyInteraction() {
+
+        // create a mock object
+        ExternalApi mockApi = Mockito.mock(ExternalApi.class);
+
+        MyService service = new MyService(mockApi);
+
+        // call the method under test
+        service.fetchData();
+
+        // verify that mockApi.getData() was called exactly once
+        verify(mockApi).getData();
+    }
+}
+
+Output:
+-------
+Test Passed: testVerifyInteraction
+Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+
+
+
+==============================================================
+Exercise 3: Argument Matching
+==============================================================
+
+Program:
+--------
+
+File: MyServiceTest.java
+------------------------
+import static org.mockito.Mockito.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+
+public class MyServiceTest {
+
+    @Test
+    public void testArgumentMatching() {
+
+        ExternalApi mockApi = Mockito.mock(ExternalApi.class);
+
+        // stub using an argument matcher - any int returns this value
+        when(mockApi.getDataById(anyInt())).thenReturn("Matched Data");
+
+        MyService service = new MyService(mockApi);
+        String result = service.fetchDataById(42);
+
+        assertEquals("Matched Data", result);
+
+        // verify with a specific value
+        verify(mockApi).getDataById(42);
+
+        // verify with an argument matcher
+        verify(mockApi).getDataById(anyInt());
+    }
+}
+
+Output:
+-------
+Test Passed: testArgumentMatching
+Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+
+
+
+==============================================================
+Exercise 4: Handling Void Methods
+==============================================================
+
+Program:
+--------
+
+File: MyServiceTest.java
+------------------------
+import static org.mockito.Mockito.*;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+
+public class MyServiceTest {
+
+    @Test
+    public void testVoidMethod() {
+
+        ExternalApi mockApi = Mockito.mock(ExternalApi.class);
+
+        // stub the void method - do nothing when called
+        doNothing().when(mockApi).sendData("Hello");
+
+        MyService service = new MyService(mockApi);
+
+        // call the void method
+        service.pushData("Hello");
+
+        // verify the interaction
+        verify(mockApi).sendData("Hello");
+    }
+}
+
+Output:
+-------
+Test Passed: testVoidMethod
+Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+
+
+
+==============================================================
+Exercise 5: Mocking and Stubbing with Multiple Returns
+==============================================================
+
+Program:
+--------
+
+File: MyServiceTest.java
+------------------------
+import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+
+public class MyServiceTest {
+
+    @Test
+    public void testMultipleReturns() {
+
+        ExternalApi mockApi = Mockito.mock(ExternalApi.class);
+
+        // return different values on consecutive calls
+        when(mockApi.getData())
+            .thenReturn("First")
+            .thenReturn("Second")
+            .thenReturn("Third");
+
+        MyService service = new MyService(mockApi);
+
+        // each call gets the next value in order
+        assertEquals("First", service.fetchData());
+        assertEquals("Second", service.fetchData());
+        assertEquals("Third", service.fetchData());
+
+        // any further call returns the last stubbed value
+        assertEquals("Third", service.fetchData());
+    }
+}
+
+Output:
+-------
+Test Passed: testMultipleReturns
+Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+
+
+
+==============================================================
+Exercise 6: Verifying Interaction Order
+==============================================================
+
+Program:
+--------
+
+File: MyServiceTest.java
+------------------------
+import static org.mockito.Mockito.*;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+import org.mockito.InOrder;
+
+public class MyServiceTest {
+
+    @Test
+    public void testInteractionOrder() {
+
+        ExternalApi mockApi = Mockito.mock(ExternalApi.class);
+
+        MyService service = new MyService(mockApi);
+
+        // call the methods in a specific order
+        service.fetchData();
+        service.pushData("Hello");
+        service.fetchDataById(10);
+
+        // verify the calls happened in that order
+        InOrder inOrder = inOrder(mockApi);
+        inOrder.verify(mockApi).getData();
+        inOrder.verify(mockApi).sendData("Hello");
+        inOrder.verify(mockApi).getDataById(10);
+    }
+}
+
+Output:
+-------
+Test Passed: testInteractionOrder
+Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+
+
+
+==============================================================
+Exercise 7: Handling Void Methods with Exceptions
+==============================================================
+
+Program:
+--------
+
+File: MyServiceTest.java
+------------------------
+import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+
+public class MyServiceTest {
+
+    @Test
+    public void testVoidMethodThrowsException() {
+
+        ExternalApi mockApi = Mockito.mock(ExternalApi.class);
+
+        // stub the void method to throw an exception
+        doThrow(new RuntimeException("API error"))
+            .when(mockApi).sendData("bad");
+
+        MyService service = new MyService(mockApi);
+
+        // call should throw the stubbed exception
+        RuntimeException ex = assertThrows(RuntimeException.class,
+            () -> service.pushData("bad"));
+
+        System.out.println("Caught exception: " + ex.getMessage());
+
+        // verify the interaction still happened
+        verify(mockApi).sendData("bad");
+    }
+}
+
+Output:
+-------
+Caught exception: API error
+
+Test Passed: testVoidMethodThrowsException
+Tests run: 1, Failures: 0, Errors: 0, Skipped: 0

@@ -1,0 +1,224 @@
+==============================================================
+                SLF4J Logging - Practice
+==============================================================
+
+
+==============================================================
+Exercise 1: Logging Error Messages and Warning Levels
+==============================================================
+
+Program:
+--------
+
+File: pom.xml (dependencies section)
+------------------------------------
+<dependencies>
+    <dependency>
+        <groupId>org.slf4j</groupId>
+        <artifactId>slf4j-api</artifactId>
+        <version>1.7.30</version>
+    </dependency>
+    <dependency>
+        <groupId>ch.qos.logback</groupId>
+        <artifactId>logback-classic</artifactId>
+        <version>1.2.3</version>
+    </dependency>
+</dependencies>
+
+
+File: LoggingExample.java
+-------------------------
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+// demo of error and warn logging levels using SLF4J
+public class LoggingExample {
+
+    // one logger per class - name is used in log output
+    private static final Logger logger =
+            LoggerFactory.getLogger(LoggingExample.class);
+
+    public static void main(String[] args) {
+
+        logger.error("This is an error message");
+        logger.warn("This is a warning message");
+
+        // just to see all common levels
+        logger.info("This is an info message");
+        logger.debug("This is a debug message");
+    }
+}
+
+Output:
+-------
+14:32:10.421 [main] ERROR LoggingExample - This is an error message
+14:32:10.423 [main] WARN  LoggingExample - This is a warning message
+14:32:10.423 [main] INFO  LoggingExample - This is an info message
+14:32:10.424 [main] DEBUG LoggingExample - This is a debug message
+
+
+
+==============================================================
+Exercise 2: Parameterized Logging
+==============================================================
+
+Program:
+--------
+
+File: pom.xml (dependencies section)
+------------------------------------
+<dependencies>
+    <dependency>
+        <groupId>org.slf4j</groupId>
+        <artifactId>slf4j-api</artifactId>
+        <version>1.7.30</version>
+    </dependency>
+    <dependency>
+        <groupId>ch.qos.logback</groupId>
+        <artifactId>logback-classic</artifactId>
+        <version>1.2.3</version>
+    </dependency>
+</dependencies>
+
+
+File: ParameterizedLoggingExample.java
+--------------------------------------
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+// demo of parameterized logging using SLF4J
+// the {} placeholder is replaced only if the log level is enabled
+// so it is faster than string concatenation
+public class ParameterizedLoggingExample {
+
+    private static final Logger logger =
+            LoggerFactory.getLogger(ParameterizedLoggingExample.class);
+
+    public static void main(String[] args) {
+
+        String userName = "Nandhini";
+        int userId = 101;
+        double balance = 4500.75;
+
+        // one placeholder
+        logger.info("User {} logged in", userName);
+
+        // multiple placeholders
+        logger.info("User {} (id {}) has balance Rs.{}",
+                    userName, userId, balance);
+
+        // parameter in a warning
+        logger.warn("Low balance for user {}: Rs.{}", userName, balance);
+
+        // parameter with an exception
+        try {
+            int result = 10 / 0;
+        } catch (ArithmeticException e) {
+            logger.error("Error while processing user {}: {}",
+                         userName, e.getMessage());
+        }
+    }
+}
+
+Output:
+-------
+14:45:12.101 [main] INFO  ParameterizedLoggingExample - User Nandhini logged in
+14:45:12.103 [main] INFO  ParameterizedLoggingExample - User Nandhini (id 101) has balance Rs.4500.75
+14:45:12.103 [main] WARN  ParameterizedLoggingExample - Low balance for user Nandhini: Rs.4500.75
+14:45:12.104 [main] ERROR ParameterizedLoggingExample - Error while processing user Nandhini: / by zero
+
+
+
+==============================================================
+Exercise 3: Using Different Appenders
+==============================================================
+
+Program:
+--------
+
+File: pom.xml (dependencies section)
+------------------------------------
+<dependencies>
+    <dependency>
+        <groupId>org.slf4j</groupId>
+        <artifactId>slf4j-api</artifactId>
+        <version>1.7.30</version>
+    </dependency>
+    <dependency>
+        <groupId>ch.qos.logback</groupId>
+        <artifactId>logback-classic</artifactId>
+        <version>1.2.3</version>
+    </dependency>
+</dependencies>
+
+
+File: src/main/resources/logback.xml
+------------------------------------
+<configuration>
+
+    <!-- appender that writes to the console -->
+    <appender name="console" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- appender that writes to a file called app.log -->
+    <appender name="file" class="ch.qos.logback.core.FileAppender">
+        <file>app.log</file>
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- root logger uses both appenders -->
+    <root level="debug">
+        <appender-ref ref="console" />
+        <appender-ref ref="file" />
+    </root>
+
+</configuration>
+
+
+File: AppenderExample.java
+--------------------------
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+// demo of using multiple appenders (console + file)
+// the same log message will be written to the console
+// AND to the app.log file because both appenders are attached
+// to the root logger
+public class AppenderExample {
+
+    private static final Logger logger =
+            LoggerFactory.getLogger(AppenderExample.class);
+
+    public static void main(String[] args) {
+
+        logger.debug("Debug message - written to console and file");
+        logger.info("Application started");
+        logger.warn("This is a warning");
+        logger.error("Something went wrong");
+        logger.info("Application finished");
+    }
+}
+
+Output:
+-------
+(Console output)
+
+14:58:20.312 [main] DEBUG AppenderExample - Debug message - written to console and file
+14:58:20.314 [main] INFO  AppenderExample - Application started
+14:58:20.314 [main] WARN  AppenderExample - This is a warning
+14:58:20.315 [main] ERROR AppenderExample - Something went wrong
+14:58:20.315 [main] INFO  AppenderExample - Application finished
+
+
+(Contents of app.log after running)
+
+14:58:20.312 [main] DEBUG AppenderExample - Debug message - written to console and file
+14:58:20.314 [main] INFO  AppenderExample - Application started
+14:58:20.314 [main] WARN  AppenderExample - This is a warning
+14:58:20.315 [main] ERROR AppenderExample - Something went wrong
+14:58:20.315 [main] INFO  AppenderExample - Application finished
