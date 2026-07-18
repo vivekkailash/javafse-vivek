@@ -1,0 +1,419 @@
+Spring Data JPA - Hands on 1
+Vivek
+----------------------------
+
+
+Hands on 1 - Spring Data JPA Quick Example
+------------------------------------------
+
+** create project from https://start.spring.io/ **
+** group: com.cognizant, artifact: orm-learn **
+** deps: DevTools, Data JPA, MySQL Driver **
+
+
+MySQL setup (run in mysql client)
+---------------------------------
+create schema ormlearn;
+
+use ormlearn;
+
+create table country(co_code varchar(2) primary key, co_name varchar(50));
+
+insert into country values ('IN', 'India');
+insert into country values ('US', 'United States of America');
+
+
+src/main/resources/application.properties
+-----------------------------------------
+# spring + app log
+logging.level.org.springframework=info
+logging.level.com.cognizant=debug
+
+# hibernate SQL log
+logging.level.org.hibernate.SQL=trace
+logging.level.org.hibernate.type.descriptor.sql=trace
+
+# log pattern
+logging.pattern.console=%d{dd-MM-yy} %d{HH:mm:ss.SSS} %-20.20thread %5p %-25.25logger{25} %25M %4L %m%n
+
+# db config
+spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
+spring.datasource.url=jdbc:mysql://localhost:3306/ormlearn
+spring.datasource.username=root
+spring.datasource.password=root
+
+# hibernate config
+spring.jpa.hibernate.ddl-auto=validate
+spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.MySQL5Dialect
+
+
+Country.java   (com.cognizant.ormlearn.model)
+---------------------------------------------
+package com.cognizant.ormlearn.model;
+
+import javax.persistence.Column;
+import javax.persistence.Entity;
+import javax.persistence.Id;
+import javax.persistence.Table;
+
+@Entity
+@Table(name="country")
+public class Country {
+
+    @Id
+    @Column(name="co_code")
+    private String code;
+
+    @Column(name="co_name")
+    private String name;
+
+    // getters + setters
+    public String getCode() { return code; }
+    public void setCode(String code) { this.code = code; }
+
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
+
+    @Override
+    public String toString() {
+        return "Country [code=" + code + ", name=" + name + "]";
+    }
+}
+
+
+CountryRepository.java   (com.cognizant.ormlearn.repository)
+------------------------------------------------------------
+package com.cognizant.ormlearn.repository;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+import com.cognizant.ormlearn.model.Country;
+
+@Repository
+public interface CountryRepository extends JpaRepository<Country, String> {
+    // no code needed - JpaRepository gives us all crud methods
+}
+
+
+CountryService.java   (com.cognizant.ormlearn.service)
+------------------------------------------------------
+package com.cognizant.ormlearn.service;
+
+import java.util.List;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.cognizant.ormlearn.model.Country;
+import com.cognizant.ormlearn.repository.CountryRepository;
+
+@Service
+public class CountryService {
+
+    @Autowired
+    private CountryRepository countryRepository;
+
+    @Transactional
+    public List<Country> getAllCountries() {
+        return countryRepository.findAll();
+    }
+}
+
+
+OrmLearnApplication.java
+------------------------
+package com.cognizant.ormlearn;
+
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.context.ApplicationContext;
+
+import com.cognizant.ormlearn.model.Country;
+import com.cognizant.ormlearn.service.CountryService;
+
+@SpringBootApplication
+public class OrmLearnApplication {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(OrmLearnApplication.class);
+    private static CountryService countryService;
+
+    public static void main(String[] args) {
+        ApplicationContext context = SpringApplication.run(OrmLearnApplication.class, args);
+        countryService = context.getBean(CountryService.class);
+
+        LOGGER.info("Inside main");
+        testGetAllCountries();
+    }
+
+    private static void testGetAllCountries() {
+        LOGGER.info("Start");
+        List<Country> countries = countryService.getAllCountries();
+        LOGGER.debug("countries={}", countries);
+        LOGGER.info("End");
+    }
+}
+
+
+Output (log lines - trimmed):
+Inside main
+Start
+countries=[Country [code=IN, name=India], Country [code=US, name=United States of America]]
+End
+
+
+
+Hands on 2 - Hibernate XML Config walkthrough
+---------------------------------------------
+
+** just SME walkthrough, no code from us **
+** ref link: https://www.tutorialspoint.com/hibernate/hibernate_examples.htm **
+
+Points noted:
+- persistence class + mapping xml + configuration xml
+- SessionFactory -> Session -> Transaction
+- session.beginTransaction() / commit() / rollback()
+- session.save(), createQuery().list(), get(), delete()
+
+
+
+Hands on 3 - Hibernate Annotation Config walkthrough
+----------------------------------------------------
+
+** SME walkthrough only **
+** ref: https://www.tutorialspoint.com/hibernate/hibernate_annotations.htm **
+
+Points noted:
+- @Entity, @Table, @Id, @GeneratedValue, @Column
+- hibernate.cfg.xml with dialect, driver, url, username, password
+- annotations replace xml mapping file
+
+
+
+Hands on 4 - Difference between JPA, Hibernate & Spring Data JPA
+----------------------------------------------------------------
+
+** notes (no code needed) **
+
+JPA (Java Persistence API)
+- JSR 338 specification
+- just a specification - no implementation
+- Hibernate is one implementation of JPA
+
+Hibernate
+- ORM tool that implements JPA
+- session factory, session, transaction etc
+
+Spring Data JPA
+- another layer above JPA / Hibernate
+- reduces boilerplate code
+- manages transactions
+- gives us JpaRepository with save, findById, findAll etc
+
+
+Hibernate style code sample (long):
+   Session session = factory.openSession();
+   Transaction tx = null;
+   try {
+       tx = session.beginTransaction();
+       employeeID = (Integer) session.save(employee);
+       tx.commit();
+   } catch (HibernateException e) {
+       if (tx != null) tx.rollback();
+   } finally {
+       session.close();
+   }
+
+
+Spring Data JPA style (much shorter):
+   @Autowired
+   private EmployeeRepository employeeRepository;
+
+   @Transactional
+   public void addEmployee(Employee employee) {
+       employeeRepository.save(employee);
+   }
+
+** big difference - spring data JPA hides all the session/tx code **
+
+
+
+Hands on 5 - Setup for country services + populate data
+-------------------------------------------------------
+
+** run the big insert script that has all ~250 countries **
+** file given: country insert list **
+
+Also change ddl-auto:
+# in application.properties
+spring.jpa.hibernate.ddl-auto=validate     # keep as validate
+
+** validate = just check tables exist. safest for prod-like work **
+
+Notes on ddl-auto:
+- create      -> drops and recreates tables (dangerous - loses data)
+- validate    -> just checks table + columns exist (throws if missing)
+- update      -> adds missing tables/columns, doesn't drop
+- create-drop -> creates on start, drops on shutdown
+
+
+
+Hands on 6 - Find country by code
+---------------------------------
+
+CountryNotFoundException.java   (com.cognizant.ormlearn.service.exception)
+--------------------------------------------------------------------------
+package com.cognizant.ormlearn.service.exception;
+
+public class CountryNotFoundException extends Exception {
+
+    public CountryNotFoundException(String message) {
+        super(message);
+    }
+}
+
+
+CountryService.java  (add this method)
+--------------------------------------
+@Transactional
+public Country findCountryByCode(String countryCode) throws CountryNotFoundException {
+
+    Optional<Country> result = countryRepository.findById(countryCode);
+
+    if (!result.isPresent()) {
+        throw new CountryNotFoundException("Country not found for code: " + countryCode);
+    }
+    return result.get();
+}
+
+// don't forget: import java.util.Optional;
+
+
+OrmLearnApplication.java (add this test method)
+-----------------------------------------------
+private static void testFindCountryByCode() throws CountryNotFoundException {
+    LOGGER.info("Start");
+    Country country = countryService.findCountryByCode("IN");
+    LOGGER.debug("Country:{}", country);
+    LOGGER.info("End");
+}
+
+// call this from main() - comment out the earlier test
+
+
+Output:
+Start
+Country:Country [code=IN, name=India]
+End
+
+
+** if code doesn't exist, it throws CountryNotFoundException **
+
+
+
+Hands on 7 - Add a new country
+------------------------------
+
+CountryService.java (add)
+-------------------------
+@Transactional
+public void addCountry(Country country) {
+    countryRepository.save(country);
+}
+
+
+OrmLearnApplication.java (add)
+------------------------------
+private static void testAddCountry() throws CountryNotFoundException {
+    LOGGER.info("Start");
+
+    Country c = new Country();
+    c.setCode("ZZ");           // some new code not in db
+    c.setName("ZeeZee Land");
+    countryService.addCountry(c);
+
+    // now try to find it back
+    Country saved = countryService.findCountryByCode("ZZ");
+    LOGGER.debug("Saved country: {}", saved);
+
+    LOGGER.info("End");
+}
+
+
+Output:
+Start
+Saved country: Country [code=ZZ, name=ZeeZee Land]
+End
+
+
+** check db: select * from country where co_code='ZZ'; should return the row **
+
+
+
+Hands on 8 - Update country
+---------------------------
+
+CountryService.java (add)
+-------------------------
+@Transactional
+public void updateCountry(String code, String name) {
+    Country country = countryRepository.findById(code).get();
+    country.setName(name);
+    countryRepository.save(country);
+}
+
+
+OrmLearnApplication.java (add)
+------------------------------
+private static void testUpdateCountry() throws CountryNotFoundException {
+    LOGGER.info("Start");
+    countryService.updateCountry("ZZ", "Zeezee Republic");
+
+    Country c = countryService.findCountryByCode("ZZ");
+    LOGGER.debug("After update: {}", c);
+    LOGGER.info("End");
+}
+
+
+Output:
+Start
+After update: Country [code=ZZ, name=Zeezee Republic]
+End
+
+
+
+Hands on 9 - Delete country
+---------------------------
+
+CountryService.java (add)
+-------------------------
+@Transactional
+public void deleteCountry(String code) {
+    countryRepository.deleteById(code);
+}
+
+
+OrmLearnApplication.java (add)
+------------------------------
+private static void testDeleteCountry() {
+    LOGGER.info("Start");
+    countryService.deleteCountry("ZZ");
+    LOGGER.info("Deleted ZZ");
+    LOGGER.info("End");
+}
+
+
+Output:
+Start
+Deleted ZZ
+End
+
+
+** verify: select * from country where co_code='ZZ'; -> should be empty **
+
+
+-- end --
