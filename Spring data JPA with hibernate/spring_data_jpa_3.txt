@@ -1,0 +1,445 @@
+Spring Data JPA - Hands on 3
+Vivek
+----------------------------
+
+
+Hands on 1 - HQL and JPQL intro
+-------------------------------
+
+** just notes, no code **
+
+- HQL = Hibernate Query Language
+- JPQL = Java Persistence Query Language
+- both are object based (use class names, not table names)
+- JPQL is a subset of HQL - every JPQL is valid HQL, not the other way
+- both support SELECT, UPDATE, DELETE
+- HQL also allows INSERT (extra)
+
+Example: FROM Employee e WHERE e.permanent = 1
+   -> Employee is the CLASS name, not table
+   -> permanent is the FIELD name, not column
+
+
+
+Hands on 2 - Get all permanent employees using HQL
+--------------------------------------------------
+
+EmployeeRepository.java (add method with @Query)
+------------------------------------------------
+package com.cognizant.ormlearn.repository;
+
+import java.util.List;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.stereotype.Repository;
+
+import com.cognizant.ormlearn.model.Employee;
+
+@Repository
+public interface EmployeeRepository extends JpaRepository<Employee, Integer> {
+
+    @Query(value="SELECT e FROM Employee e WHERE e.permanent = 1")
+    List<Employee> getAllPermanentEmployees();
+
+    // NOTE: HQL - "Employee" is the class not the table
+}
+
+
+EmployeeService.java (add method)
+---------------------------------
+@Transactional
+public List<Employee> getAllPermanentEmployees() {
+    return employeeRepository.getAllPermanentEmployees();
+}
+
+
+OrmLearnApplication.java (test method)
+--------------------------------------
+public static void testGetAllPermanentEmployees() {
+    LOGGER.info("Start");
+    List<Employee> employees = employeeService.getAllPermanentEmployees();
+    LOGGER.debug("Permanent Employees: {}", employees);
+    employees.forEach(e -> LOGGER.debug("Skills: {}", e.getSkillList()));
+    LOGGER.info("End");
+}
+
+
+Output (with EAGER fetch on department and skills - lots of queries!):
+Permanent Employees: [Employee[id=1,...], Employee[id=2,...], Employee[id=4,...]]
+Skills: [Skill[id=1,name=Java], Skill[id=2,name=SQL]]
+Skills: [Skill[id=3,name=Angular]]
+Skills: [Skill[id=1,name=Java]]
+
+
+** problem: multiple queries fired (N+1 issue) **
+
+
+Fix 1 - Remove eager fetch, use join fetch in HQL
+-------------------------------------------------
+
+Department.java   -> remove fetch=EAGER from @OneToMany employeeList
+Employee.java     -> remove fetch=EAGER from @ManyToMany skillList
+
+Then update the query in EmployeeRepository:
+
+@Query(value="SELECT e FROM Employee e "
+           + "left join fetch e.department d "
+           + "left join fetch e.skillList "
+           + "WHERE e.permanent = 1")
+List<Employee> getAllPermanentEmployees();
+
+
+** now only ONE query runs. big improvement **
+
+
+Output (same result but single SQL fired):
+Permanent Employees: [Employee[id=1,...], Employee[id=2,...], Employee[id=4,...]]
+Skills: [Skill[id=1,name=Java], Skill[id=2,name=SQL]]
+Skills: [Skill[id=3,name=Angular]]
+Skills: [Skill[id=1,name=Java]]
+
+
+** takeaway - "join" links tables, "fetch" populates the beans. **
+** if you don't use fetch, the association won't be loaded (lazy) **
+
+
+
+Hands on 3 - Fetch quiz attempt details using HQL
+-------------------------------------------------
+
+** import quiz.mwb from spring-data-jpa-files, forward engineer SQL and run **
+** creates: user, question, options, attempt, attempt_question, attempt_option **
+
+
+Entity classes (short - just showing key fields + mappings)
+
+
+User.java
+---------
+@Entity
+@Table(name="user")
+public class User {
+    @Id @GeneratedValue(strategy=GenerationType.IDENTITY)
+    @Column(name="us_id") private int id;
+
+    @Column(name="us_name") private String name;
+    // getters/setters
+}
+
+
+Question.java
+-------------
+@Entity
+@Table(name="question")
+public class Question {
+    @Id @GeneratedValue(strategy=GenerationType.IDENTITY)
+    @Column(name="qu_id") private int id;
+
+    @Column(name="qu_text") private String text;
+    @Column(name="qu_score") private double score;
+    // getters/setters
+}
+
+
+Options.java
+------------
+@Entity
+@Table(name="options")
+public class Options {
+    @Id @GeneratedValue(strategy=GenerationType.IDENTITY)
+    @Column(name="op_id") private int id;
+
+    @Column(name="op_text") private String text;
+
+    @ManyToOne
+    @JoinColumn(name="op_qu_id")
+    private Question question;
+    // getters/setters
+}
+
+
+Attempt.java
+------------
+@Entity
+@Table(name="attempt")
+public class Attempt {
+    @Id @GeneratedValue(strategy=GenerationType.IDENTITY)
+    @Column(name="at_id") private int id;
+
+    @Column(name="at_date")
+    @Temporal(TemporalType.DATE)
+    private Date attemptedDate;
+
+    @ManyToOne
+    @JoinColumn(name="at_us_id")
+    private User user;
+
+    @OneToMany(mappedBy="attempt")
+    private List<AttemptQuestion> attemptQuestions;
+    // getters/setters
+}
+
+
+AttemptQuestion.java
+--------------------
+@Entity
+@Table(name="attempt_question")
+public class AttemptQuestion {
+    @Id @GeneratedValue(strategy=GenerationType.IDENTITY)
+    @Column(name="aq_id") private int id;
+
+    @ManyToOne @JoinColumn(name="aq_at_id")
+    private Attempt attempt;
+
+    @ManyToOne @JoinColumn(name="aq_qu_id")
+    private Question question;
+
+    @OneToMany(mappedBy="attemptQuestion")
+    private List<AttemptOption> attemptOptions;
+    // getters/setters
+}
+
+
+AttemptOption.java
+------------------
+@Entity
+@Table(name="attempt_option")
+public class AttemptOption {
+    @Id @GeneratedValue(strategy=GenerationType.IDENTITY)
+    @Column(name="ao_id") private int id;
+
+    @ManyToOne @JoinColumn(name="ao_aq_id")
+    private AttemptQuestion attemptQuestion;
+
+    @ManyToOne @JoinColumn(name="ao_op_id")
+    private Options option;
+
+    @Column(name="ao_selected") private boolean selected;
+    @Column(name="ao_correct")  private boolean correct;
+    // getters/setters
+}
+
+
+AttemptRepository.java
+----------------------
+@Repository
+public interface AttemptRepository extends JpaRepository<Attempt, Integer> {
+
+    @Query(value = "SELECT a FROM Attempt a "
+                 + "join fetch a.user u "
+                 + "join fetch a.attemptQuestions aq "
+                 + "join fetch aq.question q "
+                 + "join fetch aq.attemptOptions ao "
+                 + "join fetch ao.option o "
+                 + "WHERE u.id = :userId AND a.id = :attemptId")
+    Attempt getAttempt(@Param("userId") int userId,
+                       @Param("attemptId") int attemptId);
+}
+
+
+AttemptService.java
+-------------------
+@Service
+public class AttemptService {
+
+    @Autowired
+    private AttemptRepository attemptRepository;
+
+    @Transactional
+    public Attempt getAttempt(int userId, int attemptId) {
+        return attemptRepository.getAttempt(userId, attemptId);
+    }
+}
+
+
+OrmLearnApplication test
+------------------------
+private static void testGetAttempt() {
+    Attempt a = attemptService.getAttempt(1, 1);
+
+    for (AttemptQuestion aq : a.getAttemptQuestions()) {
+        System.out.println(aq.getQuestion().getText());
+        int i = 1;
+        for (AttemptOption ao : aq.getAttemptOptions()) {
+            System.out.printf(" %d) %-10s %.1f\t%s%n",
+                i++, ao.getOption().getText(),
+                aq.getQuestion().getScore(),
+                ao.isSelected());
+        }
+        System.out.println();
+    }
+}
+
+
+Output:
+What is the extension of the hyper text markup language file?
+ 1) .xhtm       0.0    false
+ 2) .ht         0.0    false
+ 3) .html       1.0    true
+ 4) .htmx       0.0    false
+
+What is the maximum level of heading tag can be used in a HTML page?
+ 1) 5           0.0    false
+ 2) 3           0.0    true
+ 3) 4           0.0    false
+ 4) 6           1.0    false
+
+The HTML document itself begins with <html> and ends </html>. State True of False
+ 1) false       0.0    false
+ 2) true        1.0    true
+
+Choose the right option to store text value value in a variable
+ 1) 'John'      0.5    true
+ 2) John        0.0    false
+ 3) "John"      0.5    false
+ 4) /John/      0.0    false
+
+
+
+Hands on 4 - Average salary using HQL
+-------------------------------------
+
+EmployeeRepository.java (add these)
+-----------------------------------
+// avg of all employees
+@Query(value="SELECT AVG(e.salary) FROM Employee e")
+double getAverageSalary();
+
+// avg salary of one department
+@Query(value="SELECT AVG(e.salary) FROM Employee e WHERE e.department.id = :id")
+double getAverageSalary(@Param("id") int id);
+
+
+** note the : colon for named parameter, and @Param binds it **
+
+
+EmployeeService.java (add methods)
+----------------------------------
+@Transactional
+public double getAverageSalary() {
+    return employeeRepository.getAverageSalary();
+}
+
+@Transactional
+public double getAverageSalary(int deptId) {
+    return employeeRepository.getAverageSalary(deptId);
+}
+
+
+Test in OrmLearnApplication
+---------------------------
+LOGGER.debug("Overall avg salary: {}", employeeService.getAverageSalary());
+LOGGER.debug("Dept 1 avg salary: {}", employeeService.getAverageSalary(1));
+LOGGER.debug("Dept 2 avg salary: {}", employeeService.getAverageSalary(2));
+
+
+Output:
+Overall avg salary: 32500.0
+Dept 1 avg salary: 27500.0
+Dept 2 avg salary: 45000.0
+
+
+** works the same for SUM, MIN, MAX, COUNT etc **
+
+
+
+Hands on 5 - Native query
+-------------------------
+
+** direct SQL. avoid where possible - not portable across databases **
+
+
+EmployeeRepository.java (add)
+-----------------------------
+@Query(value="SELECT * FROM employee", nativeQuery=true)
+List<Employee> getAllEmployeesNative();
+
+// note: uses table name "employee" not class name
+
+
+EmployeeService.java (add)
+--------------------------
+@Transactional
+public List<Employee> getAllEmployeesNative() {
+    return employeeRepository.getAllEmployeesNative();
+}
+
+
+Test
+----
+List<Employee> list = employeeService.getAllEmployeesNative();
+list.forEach(e -> LOGGER.debug("{}", e));
+
+
+Output:
+Employee [id=1, name=John, salary=25000.0, ...]
+Employee [id=2, name=Priya, salary=30000.0, ...]
+Employee [id=3, name=Arun, salary=28000.0, ...]
+Employee [id=4, name=Meera, salary=40000.0, ...]
+Employee [id=5, name=Vivek, salary=30000.0, ...]
+
+
+** try to minimize native queries - HQL is portable, native is DB-specific **
+
+
+
+Hands on 6 - Criteria Query
+---------------------------
+
+** scenario: amazon-like search with many optional filters **
+** if we use fixed HQL, we can't handle dynamic where clauses well **
+** Criteria Query = build query programmatically at runtime **
+
+
+Example code (just for reference, not required to run):
+-------------------------------------------------------
+
+@Autowired
+private EntityManager entityManager;
+
+public List<Employee> searchEmployees(String name, Double minSalary, Boolean permanent) {
+
+    CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+    CriteriaQuery<Employee> cq = cb.createQuery(Employee.class);
+    Root<Employee> root = cq.from(Employee.class);
+
+    List<Predicate> predicates = new ArrayList<>();
+
+    // add filters only if user gave them
+    if (name != null) {
+        predicates.add(cb.like(root.get("name"), "%" + name + "%"));
+    }
+    if (minSalary != null) {
+        predicates.add(cb.greaterThan(root.get("salary"), minSalary));
+    }
+    if (permanent != null) {
+        predicates.add(cb.equal(root.get("permanent"), permanent));
+    }
+
+    cq.where(predicates.toArray(new Predicate[0]));
+
+    TypedQuery<Employee> query = entityManager.createQuery(cq);
+    return query.getResultList();
+}
+
+
+Key classes:
+- CriteriaBuilder  -> builds pieces (like, equal, greaterThan)
+- CriteriaQuery    -> the whole query
+- Root             -> the "from" table
+- TypedQuery       -> the runnable query object
+
+
+Output (call with name="vi", minSalary=25000, permanent=true):
+Employee [id=5, name=Vivek, salary=30000.0, permanent=true, ...]
+
+
+** big win: we only add filters that the user actually gave **
+** no need to write 8 different fixed queries for each combo **
+
+
+ref: https://howtodoinjava.com/hibernate/hibernate-criteria-queries-tutorial/
+
+
+-- end --

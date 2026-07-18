@@ -1,0 +1,619 @@
+Spring Data JPA - Hands on 2
+Vivek
+----------------------------
+
+
+Hands on 1 - Query methods on country table
+-------------------------------------------
+
+** just add methods to CountryRepository, spring builds the query from name **
+
+
+CountryRepository.java (updated)
+--------------------------------
+package com.cognizant.ormlearn.repository;
+
+import java.util.List;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import com.cognizant.ormlearn.model.Country;
+
+@Repository
+public interface CountryRepository extends JpaRepository<Country, String> {
+
+    // countries with the search text in name
+    List<Country> findByNameContaining(String text);
+
+    // same but sorted by name asc
+    List<Country> findByNameContainingOrderByNameAsc(String text);
+
+    // countries starting with a letter (used for A-Z index)
+    List<Country> findByNameStartingWith(String letter);
+}
+
+
+CountryService.java (add these)
+-------------------------------
+@Transactional
+public List<Country> searchByName(String text) {
+    return countryRepository.findByNameContaining(text);
+}
+
+@Transactional
+public List<Country> searchByNameSorted(String text) {
+    return countryRepository.findByNameContainingOrderByNameAsc(text);
+}
+
+@Transactional
+public List<Country> findByStartingLetter(String letter) {
+    return countryRepository.findByNameStartingWith(letter);
+}
+
+
+OrmLearnApplication.java (add these test methods)
+-------------------------------------------------
+private static void testSearchByName() {
+    LOGGER.info("Start");
+    List<Country> list = countryService.searchByName("ou");
+    list.forEach(c -> LOGGER.debug("{}", c));
+    LOGGER.info("End");
+}
+
+private static void testSearchByNameSorted() {
+    LOGGER.info("Start");
+    List<Country> list = countryService.searchByNameSorted("ou");
+    list.forEach(c -> LOGGER.debug("{}", c));
+    LOGGER.info("End");
+}
+
+private static void testStartingLetter() {
+    LOGGER.info("Start");
+    List<Country> list = countryService.findByStartingLetter("Z");
+    list.forEach(c -> LOGGER.debug("{}", c));
+    LOGGER.info("End");
+}
+
+
+Output (findByNameContaining "ou"):
+BV Bouvet Island
+DJ Djibouti
+GP Guadeloupe
+GS South Georgia and the South Sandwich Islands
+LU Luxembourg
+SS South Sudan
+TF French Southern Territories
+UM United States Minor Outlying Islands
+ZA South Africa
+
+
+Output (sorted asc):
+BV Bouvet Island
+DJ Djibouti
+TF French Southern Territories
+GP Guadeloupe
+LU Luxembourg
+ZA South Africa
+GS South Georgia and the South Sandwich Islands
+SS South Sudan
+UM United States Minor Outlying Islands
+
+
+Output (starts with Z):
+ZM Zambia
+ZW Zimbabwe
+
+
+
+Hands on 2 - Query methods on stock table
+-----------------------------------------
+
+** first create the stock table + load csv data **
+
+
+SQL to create table (run in mysql):
+CREATE TABLE IF NOT EXISTS ormlearn.stock (
+    st_id INT NOT NULL AUTO_INCREMENT,
+    st_code varchar(10),
+    st_date date,
+    st_open numeric(10,2),
+    st_close numeric(10,2),
+    st_volume numeric,
+    PRIMARY KEY (st_id)
+);
+
+-- then: mysql> source D:\spring-data-jpa-files\stock-data.sql
+
+
+Stock.java   (com.cognizant.ormlearn.model)
+-------------------------------------------
+package com.cognizant.ormlearn.model;
+
+import java.util.Date;
+
+import javax.persistence.Column;
+import javax.persistence.Entity;
+import javax.persistence.GeneratedValue;
+import javax.persistence.GenerationType;
+import javax.persistence.Id;
+import javax.persistence.Table;
+import javax.persistence.Temporal;
+import javax.persistence.TemporalType;
+
+@Entity
+@Table(name="stock")
+public class Stock {
+
+    @Id
+    @GeneratedValue(strategy=GenerationType.IDENTITY)
+    @Column(name="st_id")
+    private int id;
+
+    @Column(name="st_code")
+    private String code;
+
+    @Column(name="st_date")
+    @Temporal(TemporalType.DATE)
+    private Date date;
+
+    @Column(name="st_open")
+    private double open;
+
+    @Column(name="st_close")
+    private double close;
+
+    @Column(name="st_volume")
+    private long volume;
+
+    // getters + setters (omitted for brevity - generate in eclipse)
+
+    @Override
+    public String toString() {
+        return code + " | " + date + " | open=" + open + " close=" + close + " vol=" + volume;
+    }
+}
+
+
+StockRepository.java
+--------------------
+package com.cognizant.ormlearn.repository;
+
+import java.util.Date;
+import java.util.List;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import com.cognizant.ormlearn.model.Stock;
+
+@Repository
+public interface StockRepository extends JpaRepository<Stock, Integer> {
+
+    // 1. all facebook stock between two dates (used for a month)
+    List<Stock> findByCodeAndDateBetween(String code, Date from, Date to);
+
+    // 2. google stock where close > 1250
+    List<Stock> findByCodeAndCloseGreaterThan(String code, double price);
+
+    // 3. top 3 dates with highest volume
+    List<Stock> findTop3ByOrderByVolumeDesc();
+
+    // 4. bottom 3 dates for netflix (lowest close)
+    List<Stock> findTop3ByCodeOrderByCloseAsc(String code);
+}
+
+
+StockService.java
+-----------------
+package com.cognizant.ormlearn.service;
+
+import java.util.Date;
+import java.util.List;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.cognizant.ormlearn.model.Stock;
+import com.cognizant.ormlearn.repository.StockRepository;
+
+@Service
+public class StockService {
+
+    @Autowired
+    private StockRepository stockRepository;
+
+    @Transactional
+    public List<Stock> getFbStocksInMonth(Date from, Date to) {
+        return stockRepository.findByCodeAndDateBetween("FB", from, to);
+    }
+
+    @Transactional
+    public List<Stock> getGoogleAbove(double price) {
+        return stockRepository.findByCodeAndCloseGreaterThan("GOOGL", price);
+    }
+
+    @Transactional
+    public List<Stock> getTop3ByVolume() {
+        return stockRepository.findTop3ByOrderByVolumeDesc();
+    }
+
+    @Transactional
+    public List<Stock> getNetflixLowest3() {
+        return stockRepository.findTop3ByCodeOrderByCloseAsc("NFLX");
+    }
+}
+
+
+OrmLearnApplication.java (test methods)
+---------------------------------------
+private static StockService stockService;
+
+// in main:
+// stockService = context.getBean(StockService.class);
+
+private static void testFbSeptember() throws Exception {
+    SimpleDateFormat fmt = new SimpleDateFormat("yyyy-MM-dd");
+    Date from = fmt.parse("2019-09-01");
+    Date to   = fmt.parse("2019-09-30");
+    stockService.getFbStocksInMonth(from, to).forEach(s -> LOGGER.debug("{}", s));
+}
+
+private static void testGoogleAbove1250() {
+    stockService.getGoogleAbove(1250).forEach(s -> LOGGER.debug("{}", s));
+}
+
+private static void testTop3Volume() {
+    stockService.getTop3ByVolume().forEach(s -> LOGGER.debug("{}", s));
+}
+
+private static void testNetflixLowest3() {
+    stockService.getNetflixLowest3().forEach(s -> LOGGER.debug("{}", s));
+}
+
+
+Output (Facebook Sept 2019 - trimmed):
+FB | 2019-09-03 | open=184.0 close=182.39 vol=9779400
+FB | 2019-09-04 | open=184.65 close=187.14 vol=11308000
+FB | 2019-09-05 | open=188.53 close=190.90 vol=13876700
+FB | 2019-09-06 | open=190.21 close=187.49 vol=15226800
+... (rest of the month)
+
+
+Output (Google > 1250):
+GOOGL | 2019-04-22 | open=1236.67 close=1253.76 vol=954200
+GOOGL | 2019-04-23 | open=1256.64 close=1270.59 vol=1593400
+GOOGL | 2019-04-24 | open=1270.59 close=1260.05 vol=1169800
+GOOGL | 2019-04-25 | open=1270.30 close=1267.34 vol=1567200
+GOOGL | 2019-04-26 | open=1273.38 close=1277.42 vol=1361400
+GOOGL | 2019-04-29 | open=1280.51 close=1296.20 vol=3618400
+GOOGL | 2019-10-17 | open=1251.40 close=1252.80 vol=1047900
+
+
+Output (Top 3 volume):
+FB | 2019-01-31 | open=165.60 close=166.69 vol=77233600
+FB | 2018-10-31 | open=155.00 close=151.79 vol=60101300
+FB | 2018-12-19 | open=141.21 close=133.24 vol=57404900
+
+
+Output (Netflix lowest 3):
+NFLX | 2018-12-24 | open=242.00 close=233.88 vol=9547600
+NFLX | 2018-12-21 | open=263.83 close=246.39 vol=21397600
+NFLX | 2018-12-26 | open=233.92 close=253.67 vol=14402700
+
+
+
+Hands on 3 - Payroll tables and bean mapping
+--------------------------------------------
+
+** run payroll.sql from spring-data-jpa-files folder **
+** creates employee, department, skill, employee_skill tables **
+
+
+Employee.java  (com.cognizant.ormlearn.model)
+---------------------------------------------
+package com.cognizant.ormlearn.model;
+
+import java.util.Date;
+import javax.persistence.*;
+
+@Entity
+@Table(name="employee")
+public class Employee {
+
+    @Id
+    @GeneratedValue(strategy=GenerationType.IDENTITY)
+    @Column(name="em_id")
+    private int id;
+
+    @Column(name="em_name")
+    private String name;
+
+    @Column(name="em_salary")
+    private double salary;
+
+    @Column(name="em_permanent")
+    private boolean permanent;
+
+    @Column(name="em_date_of_birth")
+    @Temporal(TemporalType.DATE)
+    private Date dateOfBirth;
+
+    // getters/setters (generate in IDE - too many to write here)
+
+    @Override
+    public String toString() {
+        return "Employee [id=" + id + ", name=" + name + ", salary=" + salary
+                + ", permanent=" + permanent + ", dob=" + dateOfBirth + "]";
+    }
+}
+
+
+Department.java
+---------------
+package com.cognizant.ormlearn.model;
+
+import javax.persistence.*;
+
+@Entity
+@Table(name="department")
+public class Department {
+
+    @Id
+    @GeneratedValue(strategy=GenerationType.IDENTITY)
+    @Column(name="dp_id")
+    private int id;
+
+    @Column(name="dp_name")
+    private String name;
+
+    // getters, setters, toString
+
+    @Override
+    public String toString() {
+        return "Department [id=" + id + ", name=" + name + "]";
+    }
+}
+
+
+Skill.java
+----------
+package com.cognizant.ormlearn.model;
+
+import javax.persistence.*;
+
+@Entity
+@Table(name="skill")
+public class Skill {
+
+    @Id
+    @GeneratedValue(strategy=GenerationType.IDENTITY)
+    @Column(name="sk_id")
+    private int id;
+
+    @Column(name="sk_name")
+    private String name;
+
+    // getters, setters, toString
+
+    @Override
+    public String toString() {
+        return "Skill [id=" + id + ", name=" + name + "]";
+    }
+}
+
+
+Repositories (just interfaces extending JpaRepository)
+------------------------------------------------------
+@Repository
+public interface EmployeeRepository extends JpaRepository<Employee, Integer> { }
+
+@Repository
+public interface DepartmentRepository extends JpaRepository<Department, Integer> { }
+
+@Repository
+public interface SkillRepository extends JpaRepository<Skill, Integer> { }
+
+
+
+Hands on 4 - Many to One (Employee -> Department)
+-------------------------------------------------
+
+** service classes - one per entity, all similar. Just showing Employee **
+
+
+EmployeeService.java
+--------------------
+package com.cognizant.ormlearn.service;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.cognizant.ormlearn.model.Employee;
+import com.cognizant.ormlearn.repository.EmployeeRepository;
+
+@Service
+public class EmployeeService {
+
+    @Autowired
+    private EmployeeRepository employeeRepository;
+
+    @Transactional
+    public Employee get(int id) {
+        return employeeRepository.findById(id).get();
+    }
+
+    @Transactional
+    public void save(Employee employee) {
+        employeeRepository.save(employee);
+    }
+}
+
+** DepartmentService and SkillService are same pattern - copy paste **
+
+
+Employee.java  (add this field for many-to-one)
+-----------------------------------------------
+@ManyToOne
+@JoinColumn(name="em_dp_id")
+private Department department;
+
+// getter + setter for department
+
+
+OrmLearnApplication.java (add test method)
+------------------------------------------
+private static EmployeeService employeeService;
+private static DepartmentService departmentService;
+private static SkillService skillService;
+
+// in main() get all three from context
+
+private static void testGetEmployee() {
+    LOGGER.info("Start");
+    Employee employee = employeeService.get(1);
+    LOGGER.debug("Employee: {}", employee);
+    LOGGER.debug("Department: {}", employee.getDepartment());
+    LOGGER.info("End");
+}
+
+
+Output:
+Start
+Employee: Employee [id=1, name=John, salary=25000.0, permanent=true, dob=...]
+Department: Department [id=1, name=Development]
+End
+
+
+** by default ManyToOne is EAGER, so department comes automatically. good **
+
+
+Add Employee - testAddEmployee()
+--------------------------------
+private static void testAddEmployee() {
+    LOGGER.info("Start");
+    Employee emp = new Employee();
+    emp.setName("Vivek");
+    emp.setSalary(30000);
+    emp.setPermanent(true);
+    emp.setDateOfBirth(new Date());
+
+    Department dept = departmentService.get(1);
+    emp.setDepartment(dept);
+
+    employeeService.save(emp);
+    LOGGER.debug("Saved: {}", emp);   // id will be filled now
+    LOGGER.info("End");
+}
+
+
+Output:
+Start
+Saved: Employee [id=5, name=Vivek, salary=30000.0, permanent=true, dob=...]
+End
+
+
+Update Employee - testUpdateEmployee()
+--------------------------------------
+private static void testUpdateEmployee() {
+    Employee emp = employeeService.get(1);
+    Department newDept = departmentService.get(2);
+    emp.setDepartment(newDept);
+    employeeService.save(emp);
+    LOGGER.debug("Updated: {}", emp);
+}
+
+
+Output:
+Updated: Employee [id=1, name=John, ...] with department id=2
+
+
+
+Hands on 5 - One to Many (Department -> Employees)
+--------------------------------------------------
+
+Department.java (add employee list)
+-----------------------------------
+@OneToMany(mappedBy="department", fetch=FetchType.EAGER)
+private Set<Employee> employeeList;
+
+// getter + setter
+
+** IMPORTANT: default for OneToMany is LAZY - will throw LazyInitException **
+** need to set fetch=EAGER to load them **
+
+
+OrmLearnApplication test
+------------------------
+private static void testGetDepartment() {
+    Department d = departmentService.get(1);
+    LOGGER.debug("Department: {}", d);
+    LOGGER.debug("Employees: {}", d.getEmployeeList());
+}
+
+
+Output:
+Department: Department [id=1, name=Development]
+Employees: [Employee[id=1,name=John,...], Employee[id=3,name=Priya,...]]
+
+
+** without EAGER: throws org.hibernate.LazyInitializationException **
+
+
+
+Hands on 6 - Many to Many (Employee <-> Skill)
+----------------------------------------------
+
+Employee.java (add skills)
+--------------------------
+@ManyToMany(fetch=FetchType.EAGER)
+@JoinTable(name="employee_skill",
+    joinColumns = @JoinColumn(name="es_em_id"),
+    inverseJoinColumns = @JoinColumn(name="es_sk_id"))
+private Set<Skill> skillList;
+
+// getter + setter
+
+
+Skill.java (add employee list on other side)
+--------------------------------------------
+@ManyToMany(mappedBy="skillList")
+private Set<Employee> employeeList;
+
+// getter + setter
+
+
+OrmLearnApplication - testGetEmployee update
+--------------------------------------------
+// add this line at the end of testGetEmployee():
+LOGGER.debug("Skills: {}", employee.getSkillList());
+
+
+Output:
+Employee: Employee [id=1, name=John, ...]
+Department: Department [id=1, name=Development]
+Skills: [Skill[id=1,name=Java], Skill[id=2,name=SQL]]
+
+
+Add skill to employee - testAddSkillToEmployee()
+------------------------------------------------
+private static void testAddSkillToEmployee() {
+    Employee emp = employeeService.get(1);
+    Skill sk = skillService.get(3);   // pick one not already assigned
+
+    emp.getSkillList().add(sk);
+    employeeService.save(emp);
+    LOGGER.debug("Added skill {} to employee {}", sk, emp);
+}
+
+
+Output:
+Added skill Skill[id=3, name=Angular] to employee Employee[id=1, name=John]
+
+
+** check employee_skill table: new row (1,3) should be there **
+
+
+-- end --
