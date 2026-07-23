@@ -1,0 +1,359 @@
+Microservices - Composite Handson
+Vivek
+---------------------------------
+
+
+** Theory notes at top (short) **
+- Enterprise app = single big system with many services (banking eg)
+- Monolithic = one WAR/EAR. one memory leak brings everything down
+- Microservices = split into independent services, each in its own process
+- pros: decentralized, independent, scalable, easier fault isolation
+- cons: distributed systems are complex, harder to setup initially
+
+
+
+Part 1 - Account Microservice
+-----------------------------
+
+** create from https://start.spring.io **
+** group: com.cognizant, artifact: account **
+** deps: Spring Boot DevTools, Spring Web **
+
+
+AccountController.java   (com.cognizant.account.controller)
+-----------------------------------------------------------
+package com.cognizant.account.controller;
+
+import java.util.HashMap;
+import java.util.Map;
+
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+public class AccountController {
+
+    @GetMapping("/accounts/{number}")
+    public Map<String, Object> getAccount(@PathVariable String number) {
+        // dummy response - no db yet
+        Map<String, Object> account = new HashMap<>();
+        account.put("number", number);
+        account.put("type", "savings");
+        account.put("balance", 234343);
+        return account;
+    }
+}
+
+
+AccountApplication.java (main - just the boot class, no changes needed)
+-----------------------------------------------------------------------
+@SpringBootApplication
+public class AccountApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(AccountApplication.class, args);
+    }
+}
+
+
+Test in browser:  http://localhost:8080/accounts/00987987973432
+
+Output:
+{ "number": "00987987973432", "type": "savings", "balance": 234343 }
+
+
+
+Part 2 - Loan Microservice
+--------------------------
+
+** same setup but artifact: loan **
+** need to change port because account is already on 8080 **
+
+
+application.properties
+----------------------
+server.port=8081
+
+
+LoanController.java
+-------------------
+package com.cognizant.loan.controller;
+
+import java.util.HashMap;
+import java.util.Map;
+
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+public class LoanController {
+
+    @GetMapping("/loans/{number}")
+    public Map<String, Object> getLoan(@PathVariable String number) {
+        Map<String, Object> loan = new HashMap<>();
+        loan.put("number", number);
+        loan.put("type", "car");
+        loan.put("loan", 400000);
+        loan.put("emi", 3258);
+        loan.put("tenure", 18);
+        return loan;
+    }
+}
+
+
+Test:  http://localhost:8081/loans/H00987987972342
+
+Output:
+{ "number": "H00987987972342", "type": "car", "loan": 400000, "emi": 3258, "tenure": 18 }
+
+
+** if you skip server.port=8081 you get: **
+** "Web server failed to start. Port 8080 was already in use." **
+
+
+
+Part 3 - Eureka Discovery Server
+--------------------------------
+
+** create new project from start.spring.io **
+** group: com.cognizant, artifact: eureka-discovery-server **
+** dep: Spring Cloud Discovery > Eureka Server **
+
+
+application.properties
+----------------------
+server.port=8761
+spring.application.name=eureka-server
+
+# server itself should not register or fetch
+eureka.client.register-with-eureka=false
+eureka.client.fetch-registry=false
+
+# quiet down the noisy netflix logs
+logging.level.com.netflix.eureka=OFF
+logging.level.com.netflix.discovery=OFF
+
+
+EurekaDiscoveryServerApplication.java
+-------------------------------------
+package com.cognizant.eurekadiscoveryserver;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.netflix.eureka.server.EnableEurekaServer;
+
+@SpringBootApplication
+@EnableEurekaServer    // this makes it a eureka server
+public class EurekaDiscoveryServerApplication {
+
+    public static void main(String[] args) {
+        SpringApplication.run(EurekaDiscoveryServerApplication.class, args);
+    }
+}
+
+
+Open: http://localhost:8761
+
+Output (browser):
+Spring Eureka dashboard opens
+"Instances currently registered with Eureka" -> No instances available
+** empty for now - we need to register services next **
+
+
+
+Part 4 - Register Account service with Eureka
+---------------------------------------------
+
+** regenerate account project from start.spring.io **
+** add dep: Eureka Discovery Client **
+** overwrite pom.xml or manually add: **
+
+
+pom.xml (add these)
+-------------------
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+</dependency>
+
+<!-- also add dependencyManagement section -->
+<dependencyManagement>
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-dependencies</artifactId>
+            <version>2020.0.4</version>
+            <type>pom</type>
+            <scope>import</scope>
+        </dependency>
+    </dependencies>
+</dependencyManagement>
+
+
+application.properties (add)
+----------------------------
+spring.application.name=account-service
+
+
+AccountApplication.java (add annotation)
+----------------------------------------
+@SpringBootApplication
+@EnableDiscoveryClient       // <-- new
+public class AccountApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(AccountApplication.class, args);
+    }
+}
+
+
+Startup order:
+1) start eureka-discovery-server first (wait till ready)
+2) then start account-service
+
+Refresh http://localhost:8761
+Output:
+"Instances currently registered with Eureka"
+Application     AMIs      Availability Zones    Status
+ACCOUNT-SERVICE n/a (1)   (1)                   UP (1) - <hostname>:account-service:8080
+
+
+** do the same for loan-service **
+** spring.application.name=loan-service **
+
+After both are registered, dashboard shows:
+ACCOUNT-SERVICE   UP (1)
+LOAN-SERVICE      UP (1)
+
+
+
+Part 5 - API Gateway with greet-service
+---------------------------------------
+
+** now create a simple greet-service to demo the api gateway **
+** group: com.cts, artifact: greet-service **
+** deps: Spring Boot DevTools, Spring Web **
+
+
+greet-service application.properties
+------------------------------------
+spring.application.name=greet-service
+
+
+GreetController.java
+--------------------
+package com.cts.greet.controller;
+
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+public class GreetController {
+
+    @GetMapping("/greet")
+    public String sayHello() {
+        return "Hello World!!";
+    }
+}
+
+
+Test:  http://localhost:8080/greet
+
+Output:
+Hello World!!
+
+
+** now register greet-service with eureka too (same as account did) **
+** add spring-cloud-starter-netflix-eureka-client dep + @EnableDiscoveryClient **
+
+After registering, eureka dashboard shows:
+GREET-SERVICE     UP (1) - host.docker.internal:greet-service
+
+
+Now create the api-gateway itself
+---------------------------------
+
+** new project from start.spring.io **
+** group: com.cts, artifact: api-gateway **
+** deps: Spring Boot DevTools, Spring Boot Actuator, Eureka Discovery Client, Gateway **
+
+
+api-gateway application.properties
+----------------------------------
+server.port=9090
+spring.application.name=api-gateway
+spring.cloud.gateway.discovery.locator.enabled=true
+spring.cloud.gateway.discovery.locator.lower-case-service-id=true
+
+
+ApiGatewayApplication.java (main class - no extra annotation needed for gateway)
+-------------------------------------------------------------------------------
+@SpringBootApplication
+public class ApiGatewayApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(ApiGatewayApplication.class, args);
+    }
+}
+
+
+Run api-gateway. It registers with eureka.
+
+Dashboard now shows:
+API-GATEWAY       UP (1)
+GREET-SERVICE     UP (1)
+
+
+Test through gateway:  http://localhost:9090/greet-service/greet
+
+Output:
+Hello World!!
+
+
+** the gateway routes to the actual service through the eureka registry **
+** no hardcoded urls - just use the service name **
+
+
+
+Part 6 - Global Filter (LogFilter) for logging all requests
+-----------------------------------------------------------
+
+LogFilter.java   (com.cts.gateway.filters)
+------------------------------------------
+package com.cts.gateway.filters;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.cloud.gateway.filter.GatewayFilterChain;
+import org.springframework.cloud.gateway.filter.GlobalFilter;
+import org.springframework.stereotype.Component;
+import org.springframework.web.server.ServerWebExchange;
+import reactor.core.publisher.Mono;
+
+@Component
+public class LogFilter implements GlobalFilter {
+
+    Logger logger = LoggerFactory.getLogger(LogFilter.class);
+
+    @Override
+    public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
+        logger.info("====> Request URL {}", exchange.getRequest().getURI());
+        return chain.filter(exchange);
+    }
+}
+
+
+Test again:  http://localhost:9090/greet-service/greet
+
+Output (browser):
+Hello World!!
+
+
+Output (api-gateway console log):
+====> Request URL http://localhost:9090/greet-service/greet
+
+
+** every request that goes through the gateway is logged now **
+** GlobalFilter runs for ALL routes, no config needed **
+
+
+-- end --

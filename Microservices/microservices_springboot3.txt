@@ -1,0 +1,622 @@
+Microservices with Spring Boot 3
+Vivek
+--------------------------------
+
+
+Exercise 1 - User & Order Management System
+-------------------------------------------
+
+** two microservices - user-service and order-service **
+** they talk to each other via WebClient **
+
+
+user-service pom.xml (main deps)
+--------------------------------
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-web</artifactId>
+</dependency>
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-data-jpa</artifactId>
+</dependency>
+<dependency>
+    <groupId>mysql</groupId>
+    <artifactId>mysql-connector-java</artifactId>
+</dependency>
+
+
+user-service application.properties
+-----------------------------------
+server.port=8081
+spring.application.name=user-service
+
+spring.datasource.url=jdbc:mysql://localhost:3306/userdb
+spring.datasource.username=root
+spring.datasource.password=root
+spring.jpa.hibernate.ddl-auto=update
+
+
+User.java
+---------
+package com.vivek.user.model;
+
+import jakarta.persistence.*;
+
+@Entity
+@Table(name="users")
+public class User {
+
+    @Id
+    @GeneratedValue(strategy=GenerationType.IDENTITY)
+    private Long id;
+
+    private String name;
+    private String email;
+
+    // getters + setters
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
+    public String getEmail() { return email; }
+    public void setEmail(String email) { this.email = email; }
+}
+
+
+UserRepository.java
+-------------------
+public interface UserRepository extends JpaRepository<User, Long> { }
+
+
+UserController.java
+-------------------
+package com.vivek.user.controller;
+
+import java.util.List;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.*;
+import com.vivek.user.model.User;
+import com.vivek.user.repo.UserRepository;
+
+@RestController
+@RequestMapping("/users")
+public class UserController {
+
+    @Autowired
+    private UserRepository userRepo;
+
+    @GetMapping
+    public List<User> all() { return userRepo.findAll(); }
+
+    @GetMapping("/{id}")
+    public User one(@PathVariable Long id) {
+        return userRepo.findById(id).orElse(null);
+    }
+
+    @PostMapping
+    public User create(@RequestBody User u) { return userRepo.save(u); }
+}
+
+
+------------------
+
+order-service pom.xml (main deps)
+---------------------------------
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-webflux</artifactId>   <!-- for WebClient -->
+</dependency>
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-data-jpa</artifactId>
+</dependency>
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-web</artifactId>
+</dependency>
+
+
+order-service application.properties
+------------------------------------
+server.port=8082
+spring.application.name=order-service
+
+spring.datasource.url=jdbc:mysql://localhost:3306/orderdb
+spring.datasource.username=root
+spring.datasource.password=root
+spring.jpa.hibernate.ddl-auto=update
+
+# user-service base url
+user.service.url=http://localhost:8081
+
+
+Order.java
+----------
+@Entity
+@Table(name="orders")
+public class Order {
+
+    @Id
+    @GeneratedValue(strategy=GenerationType.IDENTITY)
+    private Long id;
+
+    private Long userId;      // fk to user
+    private String product;
+    private double amount;
+
+    // getters + setters (skipping to save space)
+}
+
+
+WebClientConfig.java
+--------------------
+@Configuration
+public class WebClientConfig {
+
+    @Bean
+    public WebClient userWebClient(@Value("${user.service.url}") String baseUrl) {
+        return WebClient.builder().baseUrl(baseUrl).build();
+    }
+}
+
+
+OrderController.java
+--------------------
+package com.vivek.order.controller;
+
+import java.util.List;
+import java.util.Map;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.reactive.function.client.WebClient;
+
+@RestController
+@RequestMapping("/orders")
+public class OrderController {
+
+    @Autowired
+    private OrderRepository orderRepo;
+
+    @Autowired
+    private WebClient userWebClient;
+
+    @PostMapping
+    public Order create(@RequestBody Order order) {
+        // check if user exists in user-service before creating order
+        Map user = userWebClient.get()
+                .uri("/users/{id}", order.getUserId())
+                .retrieve()
+                .bodyToMono(Map.class)
+                .block();
+
+        if (user == null) {
+            throw new RuntimeException("User not found");
+        }
+        return orderRepo.save(order);
+    }
+
+    @GetMapping
+    public List<Order> all() { return orderRepo.findAll(); }
+}
+
+
+Test:
+POST http://localhost:8081/users  body: {"name":"Vivek","email":"v@test.com"}
+-> {"id":1,"name":"Vivek","email":"v@test.com"}
+
+POST http://localhost:8082/orders  body: {"userId":1,"product":"Laptop","amount":50000}
+-> {"id":1,"userId":1,"product":"Laptop","amount":50000.0}
+   (WebClient calls user-service in the background to verify)
+
+
+Output:
+[
+   {"id":1,"userId":1,"product":"Laptop","amount":50000.0}
+]
+
+
+** OpenFeign is an alternative to WebClient - simpler but blocking. **
+** For OpenFeign use @FeignClient interface **
+
+
+
+Exercise 2 - Inventory Management System with Service Discovery
+---------------------------------------------------------------
+
+** two services - product-service, inventory-service **
+** discover each other through Eureka **
+** config comes from central Config Server **
+
+
+config-server pom.xml (add)
+---------------------------
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-config-server</artifactId>
+</dependency>
+
+
+ConfigServerApplication.java
+----------------------------
+@SpringBootApplication
+@EnableConfigServer
+public class ConfigServerApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(ConfigServerApplication.class, args);
+    }
+}
+
+
+config-server application.properties
+------------------------------------
+server.port=8888
+spring.application.name=config-server
+spring.cloud.config.server.git.uri=https://github.com/vivek/config-repo
+
+
+In the config git repo, put files like:
+- product-service.properties
+- inventory-service.properties
+
+sample product-service.properties (in git):
+--------------------------------------------
+server.port=8091
+spring.datasource.url=jdbc:mysql://localhost:3306/productdb
+eureka.client.service-url.defaultZone=http://localhost:8761/eureka
+
+
+----------
+
+
+product-service - the client side
+---------------------------------
+
+pom.xml (add)
+-------------
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-starter-config</artifactId>
+</dependency>
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+</dependency>
+
+
+bootstrap.properties   (loaded BEFORE application.properties)
+-------------------------------------------------------------
+spring.application.name=product-service
+spring.cloud.config.uri=http://localhost:8888
+
+
+Product.java (entity)
+---------------------
+@Entity
+public class Product {
+    @Id @GeneratedValue(strategy=GenerationType.IDENTITY)
+    private Long id;
+    private String name;
+    private int stock;
+    // getters + setters
+}
+
+
+ProductController.java
+----------------------
+@RestController
+@RequestMapping("/products")
+public class ProductController {
+
+    @Autowired
+    private ProductRepository repo;
+
+    @GetMapping
+    public List<Product> all() { return repo.findAll(); }
+
+    @GetMapping("/{id}")
+    public Product one(@PathVariable Long id) {
+        return repo.findById(id).orElse(null);
+    }
+
+    @PostMapping
+    public Product create(@RequestBody Product p) {
+        return repo.save(p);
+    }
+}
+
+
+ProductServiceApplication.java
+------------------------------
+@SpringBootApplication
+@EnableDiscoveryClient
+public class ProductServiceApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(ProductServiceApplication.class, args);
+    }
+}
+
+
+------------
+
+
+inventory-service - talks to product-service via Eureka
+-------------------------------------------------------
+
+InventoryController.java
+------------------------
+@RestController
+@RequestMapping("/inventory")
+public class InventoryController {
+
+    @Autowired
+    private RestTemplate restTemplate;
+
+    @GetMapping("/{productId}")
+    public Map checkStock(@PathVariable Long productId) {
+        // use service name from eureka, not hostname
+        String url = "http://PRODUCT-SERVICE/products/" + productId;
+        Product p = restTemplate.getForObject(url, Product.class);
+
+        Map result = new HashMap<>();
+        result.put("productId", productId);
+        result.put("stock", p.getStock());
+        result.put("available", p.getStock() > 0);
+        return result;
+    }
+}
+
+
+RestTemplateConfig.java
+-----------------------
+@Configuration
+public class RestTemplateConfig {
+
+    @Bean
+    @LoadBalanced          // <-- important, resolves service names via eureka
+    public RestTemplate restTemplate() {
+        return new RestTemplate();
+    }
+}
+
+
+Startup order:
+1) eureka-server
+2) config-server
+3) product-service
+4) inventory-service
+
+
+Test:
+POST http://localhost:8091/products  body: {"name":"Mouse","stock":15}
+-> {"id":1,"name":"Mouse","stock":15}
+
+GET http://localhost:8092/inventory/1
+Output:
+{"productId":1,"stock":15,"available":true}
+
+
+
+Exercise 3 - API Gateway (Customer & Billing services)
+------------------------------------------------------
+
+** create api-gateway that routes to customer-service and billing-service **
+
+
+api-gateway pom.xml (main dep)
+------------------------------
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-starter-gateway</artifactId>
+</dependency>
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-data-redis-reactive</artifactId>
+</dependency>
+
+
+api-gateway application.yml
+---------------------------
+server:
+  port: 9000
+
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    gateway:
+      routes:
+        - id: customer_route
+          uri: http://localhost:8101
+          predicates:
+            - Path=/api/customers/**
+          filters:
+            - RewritePath=/api/customers/(?<segment>.*), /customers/${segment}
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 5
+                redis-rate-limiter.burstCapacity: 10
+                key-resolver: "#{@userKeyResolver}"
+
+        - id: billing_route
+          uri: http://localhost:8102
+          predicates:
+            - Path=/api/billing/**
+          filters:
+            - RewritePath=/api/billing/(?<segment>.*), /billing/${segment}
+
+  # for the rate limiter cache
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+
+RateLimitConfig.java
+--------------------
+@Configuration
+public class RateLimitConfig {
+
+    @Bean
+    public KeyResolver userKeyResolver() {
+        // rate limit per user - here just use IP as demo
+        return exchange -> Mono.just(
+            exchange.getRequest().getRemoteAddress().getAddress().getHostAddress()
+        );
+    }
+}
+
+
+CachingFilter.java   (simple cache filter using local map - demo only)
+----------------------------------------------------------------------
+@Component
+public class CachingFilter implements GlobalFilter, Ordered {
+
+    private Map<String, String> cache = new ConcurrentHashMap<>();
+
+    @Override
+    public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
+        String path = exchange.getRequest().getURI().getPath();
+        System.out.println("Cache check for: " + path);
+        // real caching would need response mutation - this is just a log demo
+        return chain.filter(exchange);
+    }
+
+    @Override
+    public int getOrder() { return -1; }
+}
+
+
+Test flow:
+- request goes to  http://localhost:9000/api/customers/1
+- gateway rewrites to  /customers/1
+- forwards to  http://localhost:8101/customers/1
+- if 5 requests in a second happen, rate limiter kicks in
+- 11th request in the burst window -> 429 Too Many Requests
+
+Output (normal call):
+{"id":1,"name":"Vivek","phone":"9876543210"}
+
+Output (rate limit hit):
+HTTP/1.1 429 Too Many Requests
+
+
+
+Exercise 4 - Circuit Breaker with Resilience4j
+----------------------------------------------
+
+** payment-service calls a slow third-party api **
+** wrap with circuit breaker so we fail fast when it's down **
+
+
+pom.xml (add)
+-------------
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-starter-circuitbreaker-resilience4j</artifactId>
+</dependency>
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-aop</artifactId>
+</dependency>
+
+
+application.yml
+---------------
+resilience4j:
+  circuitbreaker:
+    instances:
+      paymentApi:
+        registerHealthIndicator: true
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        failureRateThreshold: 50
+        waitDurationInOpenState: 10s
+        permittedNumberOfCallsInHalfOpenState: 3
+
+  timelimiter:
+    instances:
+      paymentApi:
+        timeoutDuration: 2s
+
+
+PaymentService.java
+-------------------
+package com.vivek.payment.service;
+
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.timelimiter.annotation.TimeLimiter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
+
+import java.util.concurrent.CompletableFuture;
+
+@Service
+public class PaymentService {
+
+    Logger logger = LoggerFactory.getLogger(PaymentService.class);
+
+    @Autowired
+    private RestTemplate restTemplate;
+
+    // wrap third party call with circuit breaker
+    @CircuitBreaker(name = "paymentApi", fallbackMethod = "fallback")
+    @TimeLimiter(name = "paymentApi")
+    public CompletableFuture<String> processPayment(String orderId) {
+        return CompletableFuture.supplyAsync(() -> {
+            // call slow third party
+            String url = "http://third-party-api.com/pay?order=" + orderId;
+            return restTemplate.getForObject(url, String.class);
+        });
+    }
+
+    // fallback when the api is down or times out
+    public CompletableFuture<String> fallback(String orderId, Throwable ex) {
+        logger.warn("Fallback triggered for order {} : {}", orderId, ex.getMessage());
+        return CompletableFuture.completedFuture(
+            "Payment queued for later processing. Order: " + orderId);
+    }
+}
+
+
+PaymentController.java
+----------------------
+@RestController
+public class PaymentController {
+
+    @Autowired
+    private PaymentService paymentService;
+
+    @GetMapping("/pay/{orderId}")
+    public CompletableFuture<String> pay(@PathVariable String orderId) {
+        return paymentService.processPayment(orderId);
+    }
+}
+
+
+Test:
+GET  http://localhost:8080/pay/ORD100
+
+** normal case - third party is up **
+Output:
+Payment successful for ORD100
+
+** third party is slow / down **
+Output (after ~2s timeout):
+Payment queued for later processing. Order: ORD100
+
+Log:
+Fallback triggered for order ORD100 : TimeoutException
+
+
+** circuit breaker states: **
+** CLOSED  - normal, requests flow through **
+** OPEN    - too many failures, fail fast without calling **
+** HALF_OPEN - after wait time, try a few requests to see if it recovered **
+
+
+-- end --

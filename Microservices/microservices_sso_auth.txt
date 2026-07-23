@@ -1,0 +1,462 @@
+Centralized Auth & SSO with Spring Boot 3
+Vivek
+-----------------------------------------
+
+
+Exercise 1 - Centralized Authentication with OAuth 2.1/OIDC
+-----------------------------------------------------------
+
+** login through Google using OAuth2 **
+
+
+pom.xml (deps)
+--------------
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-security</artifactId>
+</dependency>
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-oauth2-client</artifactId>
+</dependency>
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-web</artifactId>
+</dependency>
+
+
+application.yml
+---------------
+spring:
+  security:
+    oauth2:
+      client:
+        registration:
+          my-client:
+            client-id: YOUR_CLIENT_ID
+            client-secret: YOUR_CLIENT_SECRET
+            scope: openid, profile, email
+            authorization-grant-type: authorization_code
+            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
+        provider:
+          my-provider:
+            authorization-uri: https://accounts.google.com/o/oauth2/auth
+            token-uri: https://oauth2.googleapis.com/token
+            user-info-uri: https://openidconnect.googleapis.com/v1/userinfo
+            user-name-attribute: sub
+
+
+** NOTE: get client-id/secret from Google Cloud Console -> OAuth 2.0 credentials **
+
+
+SecurityConfig.java
+-------------------
+package com.vivek.auth.config;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.web.SecurityFilterChain;
+
+// Spring Boot 3 uses SecurityFilterChain bean, not WebSecurityConfigurerAdapter
+@Configuration
+@EnableWebSecurity
+public class SecurityConfig {
+
+    @Bean
+    public SecurityFilterChain filter(HttpSecurity http) throws Exception {
+        http
+            .authorizeHttpRequests(auth -> auth
+                .anyRequest().authenticated())
+            .oauth2Login(Customizer.withDefaults());
+        return http.build();
+    }
+}
+
+
+** original doc used WebSecurityConfigurerAdapter but it's deprecated in Boot 3 **
+** using new bean-based config here **
+
+
+UserController.java
+-------------------
+package com.vivek.auth.controller;
+
+import java.security.Principal;
+
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+public class UserController {
+
+    @GetMapping("/user")
+    public Principal user(Principal principal) {
+        return principal;
+    }
+}
+
+
+Test flow:
+1. Go to  http://localhost:8080/user  in browser
+2. Auto-redirects to Google login page
+3. Login with Google account
+4. Redirects back to /user
+
+Output:
+{
+   "authorities":[{"authority":"OIDC_USER", ...}],
+   "attributes":{
+       "sub":"1123456789",
+       "name":"Vivek",
+       "given_name":"Vivek",
+       "email":"vivek@gmail.com",
+       "email_verified":true,
+       "picture":"https://..."
+   },
+   "authorized":true,
+   "name":"1123456789"
+}
+
+
+
+Exercise 2 - Authorization Server & Resource Server
+---------------------------------------------------
+
+** Resource server = the API that requires a valid JWT to access **
+** Authorization server issues the JWT (e.g. Keycloak, Okta, or own server) **
+
+
+pom.xml (deps)
+--------------
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-security</artifactId>
+</dependency>
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
+</dependency>
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-web</artifactId>
+</dependency>
+
+
+application.yml
+---------------
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: https://issuer.example.com
+
+# replace with actual issuer eg
+# issuer-uri: https://accounts.google.com
+# or your own auth server: http://localhost:9000
+
+
+ResourceServerConfig.java
+-------------------------
+package com.vivek.resource.config;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.web.SecurityFilterChain;
+
+@Configuration
+@EnableWebSecurity
+public class ResourceServerConfig {
+
+    @Bean
+    public SecurityFilterChain filter(HttpSecurity http) throws Exception {
+        http
+            .authorizeHttpRequests(auth -> auth
+                .anyRequest().authenticated())
+            .oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()));
+        return http.build();
+    }
+}
+
+
+SecureController.java
+---------------------
+@RestController
+public class SecureController {
+
+    @GetMapping("/secure")
+    public String secure() {
+        return "This is a secure endpoint - only accessible with a valid JWT!";
+    }
+}
+
+
+Test:
+GET  http://localhost:8080/secure    (no token)
+Output:
+HTTP 401 Unauthorized
+
+
+GET  http://localhost:8080/secure
+    Header:  Authorization: Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...
+Output:
+This is a secure endpoint - only accessible with a valid JWT!
+
+
+
+Exercise 3 - JWT for Secure Communication
+-----------------------------------------
+
+** manually issue and verify our own JWT tokens **
+
+
+pom.xml (deps)
+--------------
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-security</artifactId>
+</dependency>
+<dependency>
+    <groupId>io.jsonwebtoken</groupId>
+    <artifactId>jjwt-api</artifactId>
+    <version>0.11.5</version>
+</dependency>
+<dependency>
+    <groupId>io.jsonwebtoken</groupId>
+    <artifactId>jjwt-impl</artifactId>
+    <version>0.11.5</version>
+    <scope>runtime</scope>
+</dependency>
+<dependency>
+    <groupId>io.jsonwebtoken</groupId>
+    <artifactId>jjwt-jackson</artifactId>
+    <version>0.11.5</version>
+    <scope>runtime</scope>
+</dependency>
+
+
+** old doc used 0.9.1 - 0.11.x is the newer split-artifact version **
+
+
+application.yml
+---------------
+spring:
+  security:
+    jwt:
+      secret: my-super-secret-key-please-change-in-production-32chars
+
+
+JwtConfig.java
+--------------
+@Configuration
+public class JwtConfig {
+
+    @Value("${spring.security.jwt.secret}")
+    private String secret;
+
+    public String getSecret() { return secret; }
+}
+
+
+JwtTokenProvider.java
+---------------------
+package com.vivek.jwt.security;
+
+import io.jsonwebtoken.*;
+import io.jsonwebtoken.security.Keys;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.stereotype.Component;
+
+import java.nio.charset.StandardCharsets;
+import java.util.Collections;
+import java.util.Date;
+import javax.crypto.SecretKey;
+
+@Component
+public class JwtTokenProvider {
+
+    @Autowired
+    private JwtConfig jwtConfig;
+
+    private SecretKey key() {
+        return Keys.hmacShaKeyFor(jwtConfig.getSecret().getBytes(StandardCharsets.UTF_8));
+    }
+
+    // create token for a username, valid for 1 hour
+    public String createToken(String username) {
+        Claims claims = Jwts.claims().setSubject(username);
+        Date now = new Date();
+        Date exp = new Date(now.getTime() + 3600000);   // 1 hour
+
+        return Jwts.builder()
+                .setClaims(claims)
+                .setIssuedAt(now)
+                .setExpiration(exp)
+                .signWith(key(), SignatureAlgorithm.HS256)
+                .compact();
+    }
+
+    // check if token is valid
+    public boolean validateToken(String token) {
+        try {
+            Jwts.parserBuilder().setSigningKey(key()).build().parseClaimsJws(token);
+            return true;
+        } catch (JwtException | IllegalArgumentException e) {
+            return false;
+        }
+    }
+
+    // extract auth from token
+    public Authentication getAuthentication(String token) {
+        String username = Jwts.parserBuilder()
+                .setSigningKey(key()).build()
+                .parseClaimsJws(token).getBody().getSubject();
+
+        return new UsernamePasswordAuthenticationToken(
+                username, "", Collections.emptyList());
+    }
+}
+
+
+JwtTokenFilter.java
+-------------------
+package com.vivek.jwt.security;
+
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.stereotype.Component;
+import org.springframework.web.filter.OncePerRequestFilter;
+
+import java.io.IOException;
+
+@Component
+public class JwtTokenFilter extends OncePerRequestFilter {
+
+    @Autowired
+    private JwtTokenProvider provider;
+
+    @Override
+    protected void doFilterInternal(HttpServletRequest req,
+                                    HttpServletResponse res,
+                                    FilterChain chain) throws ServletException, IOException {
+
+        String token = resolveToken(req);
+        if (token != null && provider.validateToken(token)) {
+            Authentication auth = provider.getAuthentication(token);
+            SecurityContextHolder.getContext().setAuthentication(auth);
+        }
+        chain.doFilter(req, res);
+    }
+
+    // pull the token out of the Authorization header
+    private String resolveToken(HttpServletRequest req) {
+        String bearer = req.getHeader("Authorization");
+        if (bearer != null && bearer.startsWith("Bearer ")) {
+            return bearer.substring(7);
+        }
+        return null;
+    }
+}
+
+
+SecurityConfig.java
+-------------------
+@Configuration
+@EnableWebSecurity
+public class SecurityConfig {
+
+    @Autowired
+    private JwtTokenFilter jwtTokenFilter;
+
+    @Bean
+    public SecurityFilterChain filter(HttpSecurity http) throws Exception {
+        http
+            .csrf(csrf -> csrf.disable())
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/auth/login").permitAll()
+                .anyRequest().authenticated())
+            .addFilterBefore(jwtTokenFilter,
+                UsernamePasswordAuthenticationFilter.class);
+        return http.build();
+    }
+}
+
+
+AuthController.java   (issue token)
+-----------------------------------
+@RestController
+@RequestMapping("/auth")
+public class AuthController {
+
+    @Autowired
+    private JwtTokenProvider provider;
+
+    @PostMapping("/login")
+    public Map<String, String> login(@RequestBody Map<String, String> body) {
+        // in real life - check password against db
+        String username = body.get("username");
+
+        String token = provider.createToken(username);
+        Map<String, String> result = new HashMap<>();
+        result.put("token", token);
+        return result;
+    }
+}
+
+
+HelloController.java (secured endpoint to test)
+-----------------------------------------------
+@RestController
+public class HelloController {
+
+    @GetMapping("/hello")
+    public String hello(Principal p) {
+        return "Hello " + p.getName() + "! You have a valid token.";
+    }
+}
+
+
+Test flow:
+1. Get a token
+POST  http://localhost:8080/auth/login
+body: {"username":"vivek"}
+
+Output:
+{"token":"eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ2aXZlayIsImlhdCI6MTcyODI...."}
+
+
+2. Access secured endpoint without token
+GET  http://localhost:8080/hello
+
+Output:
+HTTP 401 Unauthorized
+
+
+3. Access secured endpoint with token
+GET  http://localhost:8080/hello
+Header: Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ2aXZlayIs...
+
+Output:
+Hello vivek! You have a valid token.
+
+
+** takeaways: **
+** - JWT is stateless - server doesn't remember sessions **
+** - token has 3 parts: header.payload.signature (base64 separated by dots) **
+** - signature is checked with the secret on every request **
+** - if secret leaks, all tokens are compromised - keep it safe **
+
+
+-- end --

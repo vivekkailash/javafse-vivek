@@ -1,0 +1,303 @@
+Edge Services & API Gateway with Spring Cloud
+Vivek
+---------------------------------------------
+
+
+Exercise 1 - Edge Service for Routing and Filtering
+---------------------------------------------------
+
+** basic api gateway that forwards requests to a backend + adds a log filter **
+
+
+pom.xml (main dep)
+------------------
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-starter-gateway</artifactId>
+</dependency>
+
+<!-- spring cloud version -->
+<dependencyManagement>
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-dependencies</artifactId>
+            <version>2022.0.4</version>
+            <type>pom</type>
+            <scope>import</scope>
+        </dependency>
+    </dependencies>
+</dependencyManagement>
+
+
+application.properties
+----------------------
+server.port=8080
+spring.application.name=edge-service
+
+# route id (first route)
+spring.cloud.gateway.routes[0].id=example_route
+spring.cloud.gateway.routes[0].uri=http://example.org
+spring.cloud.gateway.routes[0].predicates[0]=Path=/example/**
+
+
+EdgeServiceApplication.java
+---------------------------
+@SpringBootApplication
+public class EdgeServiceApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(EdgeServiceApplication.class, args);
+    }
+}
+
+
+LoggingFilter.java   (com.vivek.edge.filter)
+--------------------------------------------
+package com.vivek.edge.filter;
+
+import org.springframework.cloud.gateway.filter.GatewayFilterChain;
+import org.springframework.cloud.gateway.filter.GlobalFilter;
+import org.springframework.stereotype.Component;
+import org.springframework.web.server.ServerWebExchange;
+import reactor.core.publisher.Mono;
+
+// runs for every incoming request through the gateway
+@Component
+public class LoggingFilter implements GlobalFilter {
+
+    @Override
+    public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
+        System.out.println("Request: " + exchange.getRequest().getURI());
+        return chain.filter(exchange);
+    }
+}
+
+
+Test:
+GET  http://localhost:8080/example/anything
+
+Output (browser):
+(whatever example.org returns)
+
+
+Output (console):
+Request: http://localhost:8080/example/anything
+
+
+** how routing works: **
+** - request path matches predicate (Path=/example/**) **
+** - gateway forwards to the configured URI **
+** - global filter runs for all routes automatically **
+
+
+
+Exercise 2 - Load Balancing in the API Gateway
+----------------------------------------------
+
+** talk to a service registered in Eureka - gateway load balances between instances **
+
+
+pom.xml (deps)
+--------------
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-starter-gateway</artifactId>
+</dependency>
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-starter-loadbalancer</artifactId>
+</dependency>
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+</dependency>
+
+
+application.properties
+----------------------
+server.port=8080
+spring.application.name=load-balanced-gateway
+
+# lb://  prefix means: resolve through the load balancer (eureka)
+spring.cloud.gateway.routes[0].id=load_balanced_route
+spring.cloud.gateway.routes[0].uri=lb://example-service
+spring.cloud.gateway.routes[0].predicates[0]=Path=/loadbalanced/**
+
+# eureka
+eureka.client.service-url.defaultZone=http://localhost:8761/eureka
+
+
+LoadBalancerConfiguration.java
+------------------------------
+package com.vivek.edge.config;
+
+import org.springframework.cloud.client.ServiceInstance;
+import org.springframework.cloud.loadbalancer.core.ReactorLoadBalancer;
+import org.springframework.cloud.loadbalancer.core.ServiceInstanceListSupplier;
+import org.springframework.cloud.loadbalancer.core.RandomLoadBalancer;
+import org.springframework.cloud.loadbalancer.support.LoadBalancerClientFactory;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
+
+// override the default (round-robin) with random
+@Configuration
+public class LoadBalancerConfiguration {
+
+    @Bean
+    public ReactorLoadBalancer<ServiceInstance> randomLoadBalancer(
+            Environment env,
+            LoadBalancerClientFactory clientFactory) {
+
+        String name = env.getProperty(LoadBalancerClientFactory.PROPERTY_NAME);
+        return new RandomLoadBalancer(
+                clientFactory.getLazyProvider(name, ServiceInstanceListSupplier.class),
+                name);
+    }
+}
+
+
+** to test properly: **
+** - start eureka on 8761 **
+** - start 3 instances of example-service on 8091, 8092, 8093 **
+** - all register with eureka under same name "example-service" **
+** - start this gateway **
+
+
+Test:
+GET  http://localhost:8080/loadbalanced/hello
+GET  http://localhost:8080/loadbalanced/hello    (again)
+GET  http://localhost:8080/loadbalanced/hello    (again)
+
+Output (each call may land on a different instance):
+Hello from instance running on 8091
+Hello from instance running on 8093
+Hello from instance running on 8091
+Hello from instance running on 8092
+
+
+** default is round-robin - the RandomLoadBalancer bean overrides that **
+** with random pick each time **
+
+
+
+Exercise 3 - Resilience Patterns in the Gateway (Circuit Breaker)
+-----------------------------------------------------------------
+
+** wrap gateway routes with resilience4j circuit breaker + timeout **
+
+
+pom.xml (deps)
+--------------
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-starter-gateway</artifactId>
+</dependency>
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-starter-circuitbreaker-reactor-resilience4j</artifactId>
+</dependency>
+
+
+application.properties
+----------------------
+server.port=8080
+spring.application.name=resilient-gateway
+
+# route with a circuit breaker filter
+spring.cloud.gateway.routes[0].id=payment_route
+spring.cloud.gateway.routes[0].uri=http://localhost:8100
+spring.cloud.gateway.routes[0].predicates[0]=Path=/payments/**
+spring.cloud.gateway.routes[0].filters[0]=name=CircuitBreaker,args.name=exampleCircuitBreaker,args.fallbackUri=forward:/fallback
+
+# circuit breaker config
+resilience4j.circuitbreaker.instances.exampleCircuitBreaker.registerHealthIndicator=true
+resilience4j.circuitbreaker.instances.exampleCircuitBreaker.slidingWindowSize=10
+resilience4j.circuitbreaker.instances.exampleCircuitBreaker.failureRateThreshold=50
+resilience4j.circuitbreaker.instances.exampleCircuitBreaker.waitDurationInOpenState=10s
+resilience4j.circuitbreaker.instances.exampleCircuitBreaker.permittedNumberOfCallsInHalfOpenState=3
+
+
+ResilienceConfiguration.java
+----------------------------
+package com.vivek.edge.config;
+
+import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
+import io.github.resilience4j.timelimiter.TimeLimiterConfig;
+import org.springframework.cloud.circuitbreaker.resilience4j.ReactiveResilience4JCircuitBreakerFactory;
+import org.springframework.cloud.circuitbreaker.resilience4j.Resilience4JConfigBuilder;
+import org.springframework.cloud.client.circuitbreaker.Customizer;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+// customize the defaults for the reactive circuit breaker
+@Configuration
+public class ResilienceConfiguration {
+
+    @Bean
+    public Customizer<ReactiveResilience4JCircuitBreakerFactory> defaultCustomizer() {
+        return factory -> factory.configureDefault(id ->
+            new Resilience4JConfigBuilder(id)
+                .circuitBreakerConfig(CircuitBreakerConfig.ofDefaults())
+                .timeLimiterConfig(TimeLimiterConfig.ofDefaults())
+                .build()
+        );
+    }
+}
+
+
+FallbackController.java
+-----------------------
+package com.vivek.edge.controller;
+
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+// this runs when the circuit is OPEN or backend fails
+@RestController
+public class FallbackController {
+
+    @GetMapping("/fallback")
+    public String fallback() {
+        return "Service is temporarily unavailable. Please try again later.";
+    }
+}
+
+
+Test scenarios:
+
+
+1. Backend is up
+GET  http://localhost:8080/payments/status
+Output:
+{"status":"OK","message":"Payment service running"}
+
+
+2. Backend down or slow
+GET  http://localhost:8080/payments/status
+Output:
+Service is temporarily unavailable. Please try again later.
+
+
+3. Repeat failing requests -> circuit OPENS
+** first few failures: fallback returns after real timeout **
+** after 50% failure rate crossed: circuit opens, ALL requests get **
+** immediate fallback without even trying the backend **
+
+After 10 seconds, circuit goes to HALF_OPEN and tries a few requests.
+If they succeed -> CLOSED again. If they fail -> back to OPEN.
+
+
+** circuit breaker states summary: **
+**    CLOSED     -> requests flow normally **
+**    OPEN       -> requests fail fast, fallback is called immediately **
+**    HALF_OPEN  -> try a few requests to check if backend recovered **
+
+
+** WHY THIS MATTERS: **
+** without a circuit breaker, if the backend is slow, our gateway threads pile up **
+** waiting. eventually the gateway itself dies. circuit breaker "fails fast" so **
+** the system stays responsive even when a downstream is having trouble. **
+
+
+-- end --
