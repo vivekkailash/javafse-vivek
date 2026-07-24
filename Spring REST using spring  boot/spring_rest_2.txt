@@ -1,0 +1,343 @@
+Spring REST - Hands on 2
+Vivek
+------------------------
+
+
+** short notes on HTTP first **
+** request line: METHOD /path HTTP/1.1 **
+** response line: HTTP/1.1 STATUS message **
+** Content-Type tells the browser how to render the body **
+**   text/html, application/json, image/png, text/plain **
+
+
+
+Hands on 1 - Hello World REST service
+-------------------------------------
+
+** URL: GET /hello -> "Hello World!!" **
+
+
+HelloController.java   (com.cognizant.springlearn.controller)
+-------------------------------------------------------------
+package com.cognizant.springlearn.controller;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+public class HelloController {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(HelloController.class);
+
+    @GetMapping("/hello")
+    public String sayHello() {
+        LOGGER.info("Start");
+        String msg = "Hello World!!";
+        LOGGER.info("End");
+        return msg;
+    }
+}
+
+
+application.properties (add if not already there)
+-------------------------------------------------
+server.port=8083
+
+
+Test:  http://localhost:8083/hello  (browser or postman)
+
+Output:
+Hello World!!
+
+
+** in dev tools > network > check response headers: **
+** Content-Type: text/plain;charset=UTF-8 **
+
+
+
+Hands on 2 - Country REST service (returns India)
+-------------------------------------------------
+
+** URL: GET /country -> India country bean loaded from country.xml **
+
+
+CountryController.java
+----------------------
+package com.cognizant.springlearn.controller;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.support.ClassPathXmlApplicationContext;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.cognizant.springlearn.Country;
+
+@RestController
+public class CountryController {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(CountryController.class);
+
+    public CountryController() {
+        LOGGER.debug("CountryController created");
+    }
+
+    @RequestMapping("/country")
+    public Country getCountryIndia() {
+        LOGGER.info("Start");
+        ApplicationContext context =
+                new ClassPathXmlApplicationContext("country.xml");
+        Country country = context.getBean("in", Country.class);
+        LOGGER.info("End");
+        return country;
+    }
+}
+
+
+Test:  http://localhost:8083/country
+
+Output:
+{
+    "code": "IN",
+    "name": "India"
+}
+
+
+** Spring converts the bean into JSON automatically using Jackson **
+** notice Content-Type: application/json;charset=UTF-8 **
+
+
+
+Hands on 3 - Get all countries
+------------------------------
+
+CountryController.java (add method)
+-----------------------------------
+@GetMapping("/countries")
+public List<Country> getAllCountries() {
+    LOGGER.info("Start");
+    ApplicationContext context =
+            new ClassPathXmlApplicationContext("country.xml");
+
+    List<Country> countries =
+            (List<Country>) context.getBean("countryList", List.class);
+    LOGGER.info("End");
+    return countries;
+}
+
+
+Test:  http://localhost:8083/countries
+
+Output:
+[
+    { "code": "IN", "name": "India" },
+    { "code": "US", "name": "United States" },
+    { "code": "DE", "name": "Germany" },
+    { "code": "JP", "name": "Japan" }
+]
+
+
+
+Hands on 4 - Get country by code (case-insensitive)
+---------------------------------------------------
+
+CountryService.java   (com.cognizant.springlearn.service)
+---------------------------------------------------------
+package com.cognizant.springlearn.service;
+
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.support.ClassPathXmlApplicationContext;
+import org.springframework.stereotype.Service;
+
+import com.cognizant.springlearn.Country;
+
+@Service
+public class CountryService {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(CountryService.class);
+
+    public Country getCountry(String code) {
+        LOGGER.info("Start");
+        ApplicationContext context =
+                new ClassPathXmlApplicationContext("country.xml");
+
+        List<Country> countries =
+                (List<Country>) context.getBean("countryList", List.class);
+
+        // case-insensitive match using stream
+        Country country = countries.stream()
+                .filter(c -> c.getCode().equalsIgnoreCase(code))
+                .findFirst()
+                .orElse(null);
+
+        LOGGER.info("End");
+        return country;
+    }
+}
+
+
+CountryController.java (add)
+----------------------------
+@Autowired
+private CountryService countryService;
+
+@GetMapping("/countries/{code}")
+public Country getCountry(@PathVariable("code") String code) {
+    LOGGER.info("Start");
+    Country country = countryService.getCountry(code);
+    LOGGER.info("End");
+    return country;
+}
+
+
+Test:  http://localhost:8083/countries/in
+       http://localhost:8083/countries/IN
+       http://localhost:8083/countries/Us
+
+Output (for any of the above):
+{ "code": "IN", "name": "India" }   or  { "code": "US", "name": "United States" }
+
+
+
+Hands on 5 - Handle country not found scenario
+----------------------------------------------
+
+CountryNotFoundException.java   (com.cognizant.springlearn.service.exception)
+-----------------------------------------------------------------------------
+package com.cognizant.springlearn.service.exception;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.ResponseStatus;
+
+@ResponseStatus(value = HttpStatus.NOT_FOUND, reason = "Country not found")
+public class CountryNotFoundException extends Exception {
+
+    public CountryNotFoundException(String message) {
+        super(message);
+    }
+}
+
+
+CountryService.java (update getCountry)
+---------------------------------------
+public Country getCountry(String code) throws CountryNotFoundException {
+    LOGGER.info("Start");
+    ApplicationContext context =
+            new ClassPathXmlApplicationContext("country.xml");
+
+    List<Country> countries =
+            (List<Country>) context.getBean("countryList", List.class);
+
+    Country country = countries.stream()
+            .filter(c -> c.getCode().equalsIgnoreCase(code))
+            .findFirst()
+            .orElseThrow(() -> new CountryNotFoundException("Not found: " + code));
+
+    LOGGER.info("End");
+    return country;
+}
+
+
+CountryController.java (add throws)
+-----------------------------------
+@GetMapping("/countries/{code}")
+public Country getCountry(@PathVariable String code) throws CountryNotFoundException {
+    return countryService.getCountry(code);
+}
+
+
+Test with curl:  curl -i http://localhost:8083/countries/az
+
+Output:
+HTTP/1.1 404
+Content-Type: application/json
+
+{
+    "timestamp": "2019-10-02T03:27:54.521+0000",
+    "status": 404,
+    "error": "Not Found",
+    "message": "Country not found",
+    "path": "/countries/az"
+}
+
+
+
+Hands on 6 - MockMvc tests
+--------------------------
+
+SpringLearnApplicationTests.java
+--------------------------------
+package com.cognizant.springlearn;
+
+import static org.junit.Assert.assertNotNull;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.junit4.SpringRunner;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
+
+import com.cognizant.springlearn.controller.CountryController;
+
+@RunWith(SpringRunner.class)
+@SpringBootTest
+@AutoConfigureMockMvc
+public class SpringLearnApplicationTests {
+
+    @Autowired
+    private CountryController countryController;
+
+    @Autowired
+    private MockMvc mvc;
+
+    @Test
+    public void contextLoads() {
+        assertNotNull(countryController);
+    }
+
+    @Test
+    public void testGetCountry() throws Exception {
+        ResultActions actions = mvc.perform(get("/country"));
+        actions.andExpect(status().isOk());
+        actions.andExpect(jsonPath("$.code").exists());
+        actions.andExpect(jsonPath("$.code").value("IN"));
+        actions.andExpect(jsonPath("$.name").exists());
+        actions.andExpect(jsonPath("$.name").value("India"));
+    }
+
+    @Test
+    public void testGetCountryException() throws Exception {
+        ResultActions actions = mvc.perform(get("/countries/az"));
+        actions.andExpect(status().isNotFound());
+        actions.andExpect(status().reason("Country not found"));
+    }
+}
+
+
+Run:  right-click test file > Run As > JUnit Test
+or:   mvn clean test
+
+Output:
+Tests run: 3, Failures: 0, Errors: 0, Skipped: 0
+BUILD SUCCESS
+
+
+** contextLoads confirms the CountryController got wired **
+** testGetCountry checks the /country service works **
+** testGetCountryException checks the 404 flow **
+
+
+-- end --

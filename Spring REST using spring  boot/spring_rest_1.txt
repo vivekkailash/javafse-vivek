@@ -1,0 +1,362 @@
+Spring REST - Hands on 1
+Vivek
+------------------------
+
+
+Hands on 1 - Create Spring Web project using Maven
+--------------------------------------------------
+
+** create from https://start.spring.io **
+** group: com.cognizant, artifact: spring-learn **
+** deps: Spring Boot DevTools, Spring Web **
+
+
+SpringLearnApplication.java
+---------------------------
+package com.cognizant.springlearn;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class SpringLearnApplication {
+
+    private static final Logger LOGGER =
+            LoggerFactory.getLogger(SpringLearnApplication.class);
+
+    public static void main(String[] args) {
+        SpringApplication.run(SpringLearnApplication.class, args);
+        LOGGER.info("Inside main");
+    }
+}
+
+
+Output (log lines - trimmed):
+Starting SpringLearnApplication using Java 1.8...
+Started SpringLearnApplication in 3.421 seconds
+Inside main
+
+
+** what's inside the project **
+** src/main/java     -> application code **
+** src/main/resources -> configuration **
+** src/test/java     -> test code **
+** @SpringBootApplication  = @Configuration + @EnableAutoConfiguration + @ComponentScan **
+
+
+
+Hands on 2 - Load SimpleDateFormat from Spring XML
+--------------------------------------------------
+
+** avoid creating SimpleDateFormat all over the app - keep one in Spring context **
+
+
+src/main/resources/date-format.xml
+----------------------------------
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.springframework.org/schema/beans
+        https://www.springframework.org/schema/beans/spring-beans.xsd">
+
+    <bean id="dateFormat" class="java.text.SimpleDateFormat">
+        <constructor-arg value="dd/MM/yyyy" />
+    </bean>
+
+</beans>
+
+
+SpringLearnApplication.java (add displayDate method)
+----------------------------------------------------
+public static void displayDate() throws Exception {
+    ApplicationContext context =
+            new ClassPathXmlApplicationContext("date-format.xml");
+
+    SimpleDateFormat format =
+            context.getBean("dateFormat", SimpleDateFormat.class);
+
+    Date date = format.parse("31/12/2018");
+    System.out.println(date);
+}
+
+// call this from main
+
+
+Output:
+Mon Dec 31 00:00:00 IST 2018
+
+
+** if port conflicts - add server.port=8083 in application.properties **
+
+
+
+Hands on 3 - Incorporate Logging
+--------------------------------
+
+application.properties
+----------------------
+logging.level.org.springframework=info
+logging.level.com.cognizant.springlearn=debug
+logging.pattern.console=%d{yyMMdd}|%d{HH:mm:ss.SSS}|%-20.20thread|%5p|%-25.25logger{25}|%25M|%m%n
+
+
+SpringLearnApplication.java (updated with LOGGER)
+-------------------------------------------------
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+private static final Logger LOGGER =
+        LoggerFactory.getLogger(SpringLearnApplication.class);
+
+public static void displayDate() throws Exception {
+    LOGGER.info("START");
+
+    ApplicationContext context =
+            new ClassPathXmlApplicationContext("date-format.xml");
+    SimpleDateFormat format =
+            context.getBean("dateFormat", SimpleDateFormat.class);
+    Date date = format.parse("31/12/2018");
+
+    LOGGER.debug("{}", date);
+    LOGGER.info("END");
+}
+
+
+Output:
+250101|10:24:15.123|main                | INFO|c.c.springlearn.Spring...|          displayDate|  10|START
+250101|10:24:15.456|main                |DEBUG|c.c.springlearn.Spring...|          displayDate|  15|Mon Dec 31 00:00:00 IST 2018
+250101|10:24:15.457|main                | INFO|c.c.springlearn.Spring...|          displayDate|  16|END
+
+
+** NEVER use System.out.println() from here on. always LOGGER **
+
+
+
+Hands on 4 - Load Country from Spring XML
+-----------------------------------------
+
+Country.java   (com.cognizant.springlearn)
+------------------------------------------
+package com.cognizant.springlearn;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+public class Country {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(Country.class);
+
+    private String code;
+    private String name;
+
+    public Country() {
+        LOGGER.debug("Inside Country Constructor.");
+    }
+
+    public String getCode() {
+        LOGGER.debug("getCode called");
+        return code;
+    }
+
+    public void setCode(String code) {
+        LOGGER.debug("setCode: {}", code);
+        this.code = code;
+    }
+
+    public String getName() {
+        LOGGER.debug("getName called");
+        return name;
+    }
+
+    public void setName(String name) {
+        LOGGER.debug("setName: {}", name);
+        this.name = name;
+    }
+
+    @Override
+    public String toString() {
+        return "Country [code=" + code + ", name=" + name + "]";
+    }
+}
+
+
+src/main/resources/country.xml
+------------------------------
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.springframework.org/schema/beans
+        https://www.springframework.org/schema/beans/spring-beans.xsd">
+
+    <bean id="country" class="com.cognizant.springlearn.Country">
+        <property name="code" value="IN" />
+        <property name="name" value="India" />
+    </bean>
+
+</beans>
+
+
+SpringLearnApplication.java (add displayCountry)
+------------------------------------------------
+public static void displayCountry() {
+    LOGGER.info("START");
+
+    ApplicationContext context =
+            new ClassPathXmlApplicationContext("country.xml");
+    Country country = context.getBean("country", Country.class);
+
+    LOGGER.debug("Country : {}", country.toString());
+    LOGGER.info("END");
+}
+
+
+Output:
+START
+Inside Country Constructor.
+setCode: IN
+setName: India
+getCode called
+getName called
+Country : Country [code=IN, name=India]
+END
+
+
+** setters are called during bean creation (property injection) **
+** getters are called when toString() runs **
+
+
+
+Hands on 5 - Singleton vs Prototype scope
+-----------------------------------------
+
+** singleton is default - only one instance ever **
+** prototype makes a new one on every getBean() **
+
+
+SpringLearnApplication.java (modify displayCountry)
+---------------------------------------------------
+public static void displayCountry() {
+    LOGGER.info("START");
+    ApplicationContext context =
+            new ClassPathXmlApplicationContext("country.xml");
+
+    Country country = context.getBean("country", Country.class);
+    Country anotherCountry = context.getBean("country", Country.class);   // ask again
+
+    LOGGER.debug("Country: {}", country);
+    LOGGER.debug("AnotherCountry: {}", anotherCountry);
+    LOGGER.info("END");
+}
+
+
+Output (SINGLETON - default):
+Inside Country Constructor.       <- only ONCE
+setCode: IN
+setName: India
+Country: Country [code=IN, name=India]
+AnotherCountry: Country [code=IN, name=India]
+
+
+** now change country.xml - add scope="prototype" **
+
+<bean id="country" class="com.cognizant.springlearn.Country" scope="prototype">
+    <property name="code" value="IN" />
+    <property name="name" value="India" />
+</bean>
+
+
+Output (PROTOTYPE):
+Inside Country Constructor.       <- called
+setCode: IN
+setName: India
+Inside Country Constructor.       <- called AGAIN
+setCode: IN
+setName: India
+Country: Country [code=IN, name=India]
+AnotherCountry: Country [code=IN, name=India]
+
+
+** singleton = default. use prototype when you actually need fresh objects **
+
+
+
+Hands on 6 - Load list of countries from XML
+--------------------------------------------
+
+country.xml (update - add multiple country beans + a list)
+----------------------------------------------------------
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.springframework.org/schema/beans
+        https://www.springframework.org/schema/beans/spring-beans.xsd">
+
+    <bean id="in" class="com.cognizant.springlearn.Country">
+        <property name="code" value="IN" />
+        <property name="name" value="India" />
+    </bean>
+
+    <bean id="us" class="com.cognizant.springlearn.Country">
+        <property name="code" value="US" />
+        <property name="name" value="United States" />
+    </bean>
+
+    <bean id="de" class="com.cognizant.springlearn.Country">
+        <property name="code" value="DE" />
+        <property name="name" value="Germany" />
+    </bean>
+
+    <bean id="jp" class="com.cognizant.springlearn.Country">
+        <property name="code" value="JP" />
+        <property name="name" value="Japan" />
+    </bean>
+
+    <bean id="countryList" class="java.util.ArrayList">
+        <constructor-arg>
+            <list>
+                <ref bean="in"/>
+                <ref bean="us"/>
+                <ref bean="de"/>
+                <ref bean="jp"/>
+            </list>
+        </constructor-arg>
+    </bean>
+
+</beans>
+
+
+SpringLearnApplication.java (add displayCountries)
+--------------------------------------------------
+public static void displayCountries() {
+    LOGGER.info("START");
+
+    ApplicationContext context =
+            new ClassPathXmlApplicationContext("country.xml");
+
+    List<Country> countries = (List<Country>) context.getBean("countryList", List.class);
+
+    LOGGER.debug("Countries: {}", countries);
+    LOGGER.info("END");
+}
+
+
+Output:
+Inside Country Constructor.    <- x4 (one for each country)
+setCode: IN
+setName: India
+Inside Country Constructor.
+setCode: US
+setName: United States
+Inside Country Constructor.
+setCode: DE
+setName: Germany
+Inside Country Constructor.
+setCode: JP
+setName: Japan
+Countries: [Country [code=IN, name=India], Country [code=US, name=United States],
+            Country [code=DE, name=Germany], Country [code=JP, name=Japan]]
+
+
+-- end --

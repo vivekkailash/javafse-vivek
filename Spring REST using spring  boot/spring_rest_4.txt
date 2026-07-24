@@ -1,0 +1,491 @@
+Spring REST - Hands on 4
+Vivek
+------------------------
+
+
+** short notes on REST URL conventions **
+** GET    /countries         -> get all **
+** GET    /countries/{code}  -> get one **
+** POST   /countries         -> create (payload in body) **
+** PUT    /countries         -> update (payload in body) **
+** DELETE /countries/{code}  -> delete **
+** use hyphen for multi-word URLs (menu-item, not menu_item) **
+
+
+
+Hands on 1 - Restructure CountryController to REST standard
+-----------------------------------------------------------
+
+CountryController.java (updated)
+--------------------------------
+package com.cognizant.springlearn.controller;
+
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.*;
+
+import com.cognizant.springlearn.Country;
+import com.cognizant.springlearn.service.CountryService;
+import com.cognizant.springlearn.service.exception.CountryNotFoundException;
+
+@RestController
+@RequestMapping("/countries")     // class level - all methods start with /countries
+public class CountryController {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(CountryController.class);
+
+    @Autowired
+    private CountryService countryService;
+
+    @GetMapping
+    public List<Country> getAllCountries() {
+        return countryService.getAllCountries();
+    }
+
+    @GetMapping("/{code}")
+    public Country getCountry(@PathVariable String code)
+            throws CountryNotFoundException {
+        return countryService.getCountry(code);
+    }
+}
+
+
+
+Hands on 2 - POST to add country
+--------------------------------
+
+CountryController.java (add addCountry method)
+----------------------------------------------
+@PostMapping
+public void addCountry() {
+    LOGGER.info("Start");
+    // just a stub to verify the mapping works
+    LOGGER.info("End");
+}
+
+
+Test:  curl -i -X POST -s http://localhost:8083/countries
+
+Output:
+HTTP/1.1 200
+Content-Length: 0
+Date: Tue, 01 Oct 2019 06:41:49 GMT
+
+
+Log:
+Start
+End
+
+
+
+Hands on 3 - Read country data from POST body
+---------------------------------------------
+
+CountryController.java (update addCountry)
+------------------------------------------
+@PostMapping
+public Country addCountry(@RequestBody Country country) {
+    LOGGER.info("Start");
+    LOGGER.debug("Country received: {}", country);
+    LOGGER.info("End");
+    return country;
+}
+
+
+Test:
+curl -i -H 'Content-Type: application/json' -X POST -s \
+  -d '{"code":"IN","name":"India"}' \
+  http://localhost:8083/countries
+
+Output:
+HTTP/1.1 200
+Content-Type: application/json;charset=UTF-8
+
+{"code":"IN","name":"India"}
+
+
+** try with a typo like "nae" instead of "name" **
+curl -i -H 'Content-Type: application/json' -X POST -s \
+  -d '{"code":"IN","nae":"India"}' http://localhost:8083/countries
+
+Output:
+{"code":"IN","name":null}
+
+
+** spring uses Jackson to map JSON -> bean **
+** attribute name in json -> setter method (setName) via reflection **
+** typo "nae" -> no setter called -> null **
+
+
+
+Hands on 4 - Validation using javax.validation
+----------------------------------------------
+
+** first pass - manual validation inside controller (not great) **
+
+
+Country.java (add annotations)
+------------------------------
+import javax.validation.constraints.NotNull;
+import javax.validation.constraints.Size;
+
+public class Country {
+
+    @NotNull
+    @Size(min=2, max=2, message="Country code should be 2 characters")
+    private String code;
+
+    @NotNull
+    private String name;
+    // getters/setters
+}
+
+
+CountryController.java (manual validation in addCountry)
+--------------------------------------------------------
+@PostMapping
+public Country addCountry(@RequestBody Country country) {
+    LOGGER.info("Start");
+
+    // create validator
+    ValidatorFactory factory = Validation.buildDefaultValidatorFactory();
+    Validator validator = factory.getValidator();
+
+    // check violations
+    Set<ConstraintViolation<Country>> violations = validator.validate(country);
+    List<String> errors = new ArrayList<>();
+
+    for (ConstraintViolation<Country> v : violations) {
+        errors.add(v.getMessage());
+    }
+
+    if (violations.size() > 0) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, errors.toString());
+    }
+
+    LOGGER.info("End");
+    return country;
+}
+
+
+Test with bad data:
+curl -i -H 'Content-Type: application/json' -X POST -s \
+  -d '{"code":"I","name":"India"}' http://localhost:8083/countries
+
+Output:
+HTTP/1.1 400
+{"timestamp":"2019-10-02T10:28:56.506+0000","status":400,"error":"Bad Request",
+ "message":"[Country code should be 2 characters]","path":"/countries"}
+
+
+** problem: this validation code has to be repeated in EVERY controller **
+** if EmployeeController wants validation, same code again **
+** SOLUTION: global exception handler + @Valid **
+
+
+
+Hands on 5 - Global exception handler for validation
+----------------------------------------------------
+
+GlobalExceptionHandler.java   (com.cognizant.springlearn)
+---------------------------------------------------------
+package com.cognizant.springlearn;
+
+import java.util.*;
+import java.util.stream.Collectors;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.ControllerAdvice;
+import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
+
+import com.fasterxml.jackson.databind.exc.InvalidFormatException;
+
+@ControllerAdvice
+public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    // handles @Valid failures - runs BEFORE the controller
+    @Override
+    protected ResponseEntity<Object> handleMethodArgumentNotValid(
+            MethodArgumentNotValidException ex,
+            HttpHeaders headers, HttpStatus status, WebRequest request) {
+
+        LOGGER.info("Start");
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("timestamp", new Date());
+        body.put("status", status.value());
+
+        List<String> errors = ex.getBindingResult().getFieldErrors().stream()
+                .map(x -> x.getDefaultMessage())
+                .collect(Collectors.toList());
+
+        body.put("errors", errors);
+        LOGGER.info("End");
+        return new ResponseEntity<>(body, headers, status);
+    }
+
+    // handles bad JSON (like string in a number field)
+    @Override
+    protected ResponseEntity<Object> handleHttpMessageNotReadable(
+            HttpMessageNotReadableException ex,
+            HttpHeaders headers, HttpStatus status, WebRequest request) {
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("timestamp", new Date());
+        body.put("status", status.value());
+        body.put("error", "Bad Request");
+
+        if (ex.getCause() instanceof InvalidFormatException) {
+            Throwable cause = ex.getCause();
+            for (InvalidFormatException.Reference ref
+                    : ((InvalidFormatException) cause).getPath()) {
+                body.put("message", "Incorrect format for field '"
+                        + ref.getFieldName() + "'");
+            }
+        }
+        return new ResponseEntity<>(body, headers, status);
+    }
+}
+
+
+CountryController.java (simplify addCountry - use @Valid)
+---------------------------------------------------------
+@PostMapping
+public Country addCountry(@RequestBody @Valid Country country) {
+    LOGGER.info("Start");
+    LOGGER.debug("Country: {}", country);
+    LOGGER.info("End");
+    return country;
+}
+
+// all the manual validation code is gone
+
+
+Test:
+curl -i -H 'Content-Type: application/json' -X POST -s \
+  -d '{"code":"I","name":"India"}' http://localhost:8083/countries
+
+Output:
+HTTP/1.1 400
+{"timestamp":"2019-10-03T04:10:17.277+0000","status":400,
+ "errors":["Country code should be 2 characters"]}
+
+
+** note: CountryController.addCountry() is NOT invoked when validation fails **
+** GlobalExceptionHandler catches it first **
+
+
+
+Hands on 6 - Update employee (PUT)
+----------------------------------
+
+** first add validations to Employee/Department/Skill beans **
+
+
+Employee.java (add validation annotations)
+------------------------------------------
+public class Employee {
+
+    @NotNull
+    private Integer id;
+
+    @NotNull @NotBlank
+    @Size(min=1, max=30)
+    private String name;
+
+    @NotNull
+    @Min(0)
+    private Double salary;
+
+    @NotNull
+    private Boolean permanent;
+
+    @NotNull
+    @JsonFormat(shape=JsonFormat.Shape.STRING, pattern="dd/MM/yyyy")
+    private Date dateOfBirth;
+
+    @Valid                  // <-- important to cascade validation
+    private Department department;
+
+    @Valid
+    private List<Skill> skills;
+
+    // getters + setters
+}
+
+
+Department.java
+---------------
+public class Department {
+
+    @NotNull
+    private Integer id;
+
+    @NotNull @NotBlank
+    @Size(min=1, max=30)
+    private String name;
+}
+
+
+Skill.java
+----------
+public class Skill {
+
+    @NotNull
+    private Integer id;
+
+    @NotNull @NotBlank
+    @Size(min=1, max=30)
+    private String name;
+}
+
+
+EmployeeNotFoundException.java
+------------------------------
+package com.cognizant.springlearn.service.exception;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.ResponseStatus;
+
+@ResponseStatus(value = HttpStatus.NOT_FOUND, reason = "Employee not found")
+public class EmployeeNotFoundException extends Exception {
+    public EmployeeNotFoundException(String msg) { super(msg); }
+}
+
+
+EmployeeDao.java (add updateEmployee)
+-------------------------------------
+public void updateEmployee(Employee employee) throws EmployeeNotFoundException {
+
+    for (int i = 0; i < EMPLOYEE_LIST.size(); i++) {
+        if (EMPLOYEE_LIST.get(i).getId() == employee.getId()) {
+            EMPLOYEE_LIST.set(i, employee);
+            return;
+        }
+    }
+    throw new EmployeeNotFoundException("id=" + employee.getId());
+}
+
+
+EmployeeService.java (add updateEmployee)
+-----------------------------------------
+@Transactional
+public void updateEmployee(Employee employee) throws EmployeeNotFoundException {
+    LOGGER.info("Start");
+    employeeDao.updateEmployee(employee);
+    LOGGER.info("End");
+}
+
+
+EmployeeController.java (add updateEmployee)
+--------------------------------------------
+@PutMapping("/employees")
+public void updateEmployee(@RequestBody @Valid Employee employee)
+        throws EmployeeNotFoundException {
+    LOGGER.info("Start");
+    employeeService.updateEmployee(employee);
+    LOGGER.info("End");
+}
+
+
+Test:
+curl -i -H 'Content-Type: application/json' -X PUT -s -d '{
+  "id":1,
+  "name":"Vivek Kumar",
+  "salary":40000,
+  "permanent":true,
+  "dateOfBirth":"01/01/1998",
+  "department":{"id":1,"name":"Development"},
+  "skills":[{"id":1,"name":"Java"},{"id":2,"name":"SQL"}]
+}' http://localhost:8083/employees
+
+Output:
+HTTP/1.1 200
+
+
+** now GET /employees should show name updated to "Vivek Kumar" **
+
+
+Test with invalid input (id as string):
+curl -i -H 'Content-Type: application/json' -X PUT -s -d '{
+  "id":"abc","name":"Vivek",...
+}' http://localhost:8083/employees
+
+Output:
+HTTP/1.1 400
+{"timestamp":"...","status":400,"error":"Bad Request",
+ "message":"Incorrect format for field 'id'"}
+
+
+Test with employee not found:
+Output:
+HTTP/1.1 404
+{"timestamp":"...","status":404,"error":"Not Found","message":"Employee not found"}
+
+
+
+Hands on 7 - DELETE employee
+----------------------------
+
+EmployeeDao.java (add delete)
+-----------------------------
+public void deleteEmployee(int id) throws EmployeeNotFoundException {
+    for (int i = 0; i < EMPLOYEE_LIST.size(); i++) {
+        if (EMPLOYEE_LIST.get(i).getId() == id) {
+            EMPLOYEE_LIST.remove(i);
+            return;
+        }
+    }
+    throw new EmployeeNotFoundException("id=" + id);
+}
+
+
+EmployeeService.java (add)
+--------------------------
+@Transactional
+public void deleteEmployee(int id) throws EmployeeNotFoundException {
+    LOGGER.info("Start");
+    employeeDao.deleteEmployee(id);
+    LOGGER.info("End");
+}
+
+
+EmployeeController.java (add)
+-----------------------------
+@DeleteMapping("/employees/{id}")
+public void deleteEmployee(@PathVariable int id) throws EmployeeNotFoundException {
+    LOGGER.info("Start");
+    employeeService.deleteEmployee(id);
+    LOGGER.info("End");
+}
+
+
+Test:  curl -i -X DELETE -s http://localhost:8083/employees/2
+
+Output:
+HTTP/1.1 200
+
+** GET /employees now shows Ravi (id=2) is gone **
+
+
+Test with wrong id:
+curl -i -X DELETE -s http://localhost:8083/employees/99
+
+Output:
+HTTP/1.1 404
+{"timestamp":"...","status":404,"error":"Not Found","message":"Employee not found"}
+
+
+-- end --

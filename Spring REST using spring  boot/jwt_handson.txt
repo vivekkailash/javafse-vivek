@@ -1,0 +1,409 @@
+JWT Hands on
+Vivek
+------------
+
+
+Hands on 1 - Secure REST services with Spring Security
+------------------------------------------------------
+
+** basic case - just enable security and see what happens **
+
+
+pom.xml (add)
+-------------
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-security</artifactId>
+</dependency>
+
+
+SecurityConfig.java   (com.cognizant.springlearn.security)
+----------------------------------------------------------
+package com.cognizant.springlearn.security;
+
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
+
+@Configuration
+@EnableWebSecurity
+public class SecurityConfig extends WebSecurityConfigurerAdapter {
+    // nothing else needed yet - defaults kick in
+}
+
+
+Test without password:  curl -s http://localhost:8083/countries
+
+Output:
+{"timestamp":"2019-10-05T09:24:33.794+0000","status":401,
+ "error":"Unauthorized","message":"Unauthorized","path":"/countries"}
+
+
+** on startup spring generates a random password. check the console log: **
+** "Using generated security password: d27321a9-0751-4f59-8fc6-f8633847a9b8" **
+
+
+Test with generated password:
+curl -s -u user:d27321a9-0751-4f59-8fc6-f8633847a9b8 http://localhost:8083/countries
+
+Output:
+[{"code":"IN","name":"India"},{"code":"US","name":"United States"},...]
+
+
+** every request needs the Authorization header **
+** Basic auth = base64(username:password) - NOT secure **
+
+
+
+Hands on 2 - Create users and roles
+-----------------------------------
+
+SecurityConfig.java (add methods)
+---------------------------------
+package com.cognizant.springlearn.security;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+
+@Configuration
+@EnableWebSecurity
+public class SecurityConfig extends WebSecurityConfigurerAdapter {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(SecurityConfig.class);
+
+    // two in-memory users - admin and user, both with password "pwd"
+    @Override
+    protected void configure(AuthenticationManagerBuilder auth) throws Exception {
+        auth.inMemoryAuthentication()
+            .withUser("admin").password(passwordEncoder().encode("pwd")).roles("ADMIN")
+            .and()
+            .withUser("user").password(passwordEncoder().encode("pwd")).roles("USER");
+    }
+
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        LOGGER.info("Start");
+        return new BCryptPasswordEncoder();
+    }
+
+    // only USER role can access /countries
+    @Override
+    protected void configure(HttpSecurity httpSecurity) throws Exception {
+        httpSecurity.csrf().disable().httpBasic().and()
+            .authorizeRequests()
+            .antMatchers("/countries").hasRole("USER");
+    }
+}
+
+
+Test 1 - correct user with USER role:
+curl -s -u user:pwd http://localhost:8083/countries
+
+Output:
+[{"code":"IN","name":"India"},...]
+
+
+Test 2 - wrong password:
+curl -s -u user:wrong http://localhost:8083/countries
+
+Output:
+{"timestamp":"...","status":401,"error":"Unauthorized","message":"Unauthorized",
+ "path":"/countries"}
+
+
+Test 3 - correct password but wrong role (admin doesn't have USER):
+curl -s -u admin:pwd http://localhost:8083/countries
+
+Output:
+{"timestamp":"...","status":403,"error":"Forbidden","message":"Forbidden",
+ "path":"/countries"}
+
+
+** limitation: base64("admin:pwd") = YWRtaW46cHdk **
+** paste that in base64decode.net -> gets "admin:pwd" back easily **
+** solution: use JWT instead of Basic auth **
+
+
+
+Hands on 3 - Understanding JWT (theory)
+---------------------------------------
+
+** JWT = JSON Web Token, 3 parts separated by dots **
+** header.payload.signature **
+
+
+Header (JSON, base64 encoded):
+{ "alg": "HS256", "typ": "JWT" }
+
+
+Payload (JSON, base64 encoded):
+{ "sub": "user", "iat": 1570379474, "exp": 1570380674 }
+** iat = issued at, exp = expiry, sub = subject (username) **
+
+
+Signature:
+HMACSHA256( base64(header) + "." + base64(payload), secretkey )
+
+
+** JWT flow: **
+** 1) client sends username+password to /authenticate **
+** 2) server validates, creates token, returns it **
+** 3) client sends token in Authorization: Bearer <token> **
+** 4) server validates token on every request **
+
+
+** try it - open https://jwt.io **
+** paste the header + payload, secret = "secretkey", **
+** it computes the full token **
+
+
+
+Hands on 4 - /authenticate endpoint (returns JWT)
+-------------------------------------------------
+
+AuthenticationController.java   (com.cognizant.springlearn.controller)
+----------------------------------------------------------------------
+package com.cognizant.springlearn.controller;
+
+import java.util.Base64;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RestController;
+
+import io.jsonwebtoken.JwtBuilder;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.SignatureAlgorithm;
+
+@RestController
+public class AuthenticationController {
+
+    private static final Logger LOGGER =
+            LoggerFactory.getLogger(AuthenticationController.class);
+
+    @GetMapping("/authenticate")
+    public Map<String, String> authenticate(
+            @RequestHeader("Authorization") String authHeader) {
+
+        LOGGER.info("Start");
+        LOGGER.debug("Auth header: {}", authHeader);
+
+        String user = getUser(authHeader);
+        String token = generateJwt(user);
+
+        Map<String, String> map = new HashMap<>();
+        map.put("token", token);
+
+        LOGGER.info("End");
+        return map;
+    }
+
+    // pull username out of "Basic base64(user:pwd)"
+    private String getUser(String authHeader) {
+        LOGGER.info("Start");
+        String encoded = authHeader.substring("Basic ".length());
+        String decoded = new String(Base64.getDecoder().decode(encoded));
+        String user = decoded.split(":")[0];
+        LOGGER.debug("user: {}", user);
+        LOGGER.info("End");
+        return user;
+    }
+
+    // build a JWT token valid for 20 minutes
+    private String generateJwt(String user) {
+        LOGGER.info("Start");
+
+        JwtBuilder builder = Jwts.builder();
+        builder.setSubject(user);
+        builder.setIssuedAt(new Date());
+        builder.setExpiration(new Date(new Date().getTime() + 1200000));  // 20 min
+        builder.signWith(SignatureAlgorithm.HS256, "secretkey");
+
+        String token = builder.compact();
+        LOGGER.debug("token: {}", token);
+        LOGGER.info("End");
+        return token;
+    }
+}
+
+
+pom.xml (add JWT library)
+-------------------------
+<dependency>
+    <groupId>io.jsonwebtoken</groupId>
+    <artifactId>jjwt</artifactId>
+    <version>0.9.0</version>
+</dependency>
+
+
+SecurityConfig.java (update - add /authenticate access)
+-------------------------------------------------------
+@Override
+protected void configure(HttpSecurity httpSecurity) throws Exception {
+    httpSecurity.csrf().disable().httpBasic().and()
+        .authorizeRequests()
+        .antMatchers("/countries").hasRole("USER")
+        .antMatchers("/authenticate").hasAnyRole("USER", "ADMIN");
+}
+
+
+Test:  curl -s -u user:pwd http://localhost:8083/authenticate
+
+Output:
+{"token":"eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c2VyIiwiaWF0IjoxNTcwMzc5NDc0LCJleHAiOjE1NzAzODA2NzR9.t3LRvlCV-hwKfoqZYlaVQqEUiBloWcWn0ft3tgv0dL0"}
+
+
+** paste token in jwt.io - you can see the header/payload decoded **
+** signature is verified with "secretkey" **
+
+
+
+Hands on 5 - Authorize using JWT (validate token on every request)
+------------------------------------------------------------------
+
+** now use a filter to check the JWT on all incoming requests **
+
+
+JwtAuthorizationFilter.java   (com.cognizant.springlearn.security)
+------------------------------------------------------------------
+package com.cognizant.springlearn.security;
+
+import java.io.IOException;
+import java.util.ArrayList;
+
+import javax.servlet.FilterChain;
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.web.authentication.www.BasicAuthenticationFilter;
+
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jws;
+import io.jsonwebtoken.JwtException;
+import io.jsonwebtoken.Jwts;
+
+public class JwtAuthorizationFilter extends BasicAuthenticationFilter {
+
+    private static final Logger LOGGER =
+            LoggerFactory.getLogger(JwtAuthorizationFilter.class);
+
+    public JwtAuthorizationFilter(AuthenticationManager authenticationManager) {
+        super(authenticationManager);
+        LOGGER.info("Start");
+        LOGGER.debug("{}", authenticationManager);
+    }
+
+    @Override
+    protected void doFilterInternal(HttpServletRequest req,
+                                    HttpServletResponse res,
+                                    FilterChain chain)
+            throws IOException, ServletException {
+
+        LOGGER.info("Start");
+        String header = req.getHeader("Authorization");
+        LOGGER.debug("Header: {}", header);
+
+        // let it pass through if no Bearer token (e.g. /authenticate uses Basic)
+        if (header == null || !header.startsWith("Bearer ")) {
+            chain.doFilter(req, res);
+            return;
+        }
+
+        UsernamePasswordAuthenticationToken authentication = getAuthentication(req);
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+        chain.doFilter(req, res);
+        LOGGER.info("End");
+    }
+
+    // parse the JWT and build a Spring auth object from it
+    private UsernamePasswordAuthenticationToken getAuthentication(HttpServletRequest request) {
+        String token = request.getHeader("Authorization");
+        if (token != null) {
+            try {
+                Jws<Claims> jws = Jwts.parser()
+                        .setSigningKey("secretkey")
+                        .parseClaimsJws(token.replace("Bearer ", ""));
+
+                String user = jws.getBody().getSubject();
+                LOGGER.debug("user from token: {}", user);
+
+                if (user != null) {
+                    return new UsernamePasswordAuthenticationToken(
+                            user, null, new ArrayList<>());
+                }
+            } catch (JwtException ex) {
+                return null;
+            }
+        }
+        return null;
+    }
+}
+
+
+SecurityConfig.java (final version - register the filter)
+---------------------------------------------------------
+@Override
+protected void configure(HttpSecurity httpSecurity) throws Exception {
+    httpSecurity.csrf().disable().httpBasic().and()
+        .authorizeRequests()
+        //.antMatchers("/countries").hasRole("USER")    // commented out
+        .antMatchers("/authenticate").hasAnyRole("USER", "ADMIN")
+        .anyRequest().authenticated()
+        .and()
+        .addFilter(new JwtAuthorizationFilter(authenticationManager()));
+}
+
+
+** now /authenticate still uses Basic auth (user:pwd) **
+** all other endpoints check JWT via the filter **
+
+
+Test flow:
+
+Step 1: Get a JWT
+curl -s -u user:pwd http://localhost:8083/authenticate
+
+Output:
+{"token":"eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c2VyIiwiaWF0IjoxNzI4Mzc5NDc0Li..."}
+
+
+Step 2: Call a protected endpoint with the token
+curl -s -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c2VyLi..." \
+      http://localhost:8083/countries
+
+Output:
+[{"code":"IN","name":"India"},{"code":"US","name":"United States"},...]
+
+
+Step 3: Tamper with the token (change one character)
+curl -s -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.XXXXXX..." \
+      http://localhost:8083/countries
+
+Output:
+{"timestamp":"...","status":401,"error":"Unauthorized","message":"Unauthorized"}
+
+
+** if the signature doesn't match, JwtException is thrown and auth fails **
+** this is why the secret key must be kept safe **
+
+
+-- end --

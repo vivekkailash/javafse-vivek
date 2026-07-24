@@ -1,0 +1,469 @@
+Spring REST - Hands on 3
+Vivek
+------------------------
+
+
+** goal: employee list REST service with Controller -> Service -> Dao **
+** angular frontend from earlier module will consume these APIs **
+
+
+
+Hands on 1 - Employee data from Spring XML
+------------------------------------------
+
+Employee.java   (com.cognizant.springlearn.model)
+-------------------------------------------------
+package com.cognizant.springlearn.model;
+
+import java.util.Date;
+import java.util.List;
+
+public class Employee {
+
+    private int id;
+    private String name;
+    private double salary;
+    private boolean permanent;
+    private Date dateOfBirth;
+    private Department department;
+    private List<Skill> skills;
+
+    // getters + setters (usual boilerplate)
+
+    @Override
+    public String toString() {
+        return "Employee [id=" + id + ", name=" + name + ", salary=" + salary +
+               ", permanent=" + permanent + ", dob=" + dateOfBirth +
+               ", dept=" + department + ", skills=" + skills + "]";
+    }
+}
+
+
+Department.java
+---------------
+package com.cognizant.springlearn.model;
+
+public class Department {
+
+    private int id;
+    private String name;
+
+    // getters + setters
+
+    @Override
+    public String toString() {
+        return "Department [id=" + id + ", name=" + name + "]";
+    }
+}
+
+
+Skill.java
+----------
+package com.cognizant.springlearn.model;
+
+public class Skill {
+
+    private int id;
+    private String name;
+
+    // getters + setters
+
+    @Override
+    public String toString() {
+        return "Skill [id=" + id + ", name=" + name + "]";
+    }
+}
+
+
+employee.xml   (src/main/resources)
+-----------------------------------
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.springframework.org/schema/beans
+        https://www.springframework.org/schema/beans/spring-beans.xsd">
+
+    <!-- departments -->
+    <bean id="d1" class="com.cognizant.springlearn.model.Department">
+        <property name="id" value="1"/>
+        <property name="name" value="Development"/>
+    </bean>
+    <bean id="d2" class="com.cognizant.springlearn.model.Department">
+        <property name="id" value="2"/>
+        <property name="name" value="Finance"/>
+    </bean>
+    <bean id="d3" class="com.cognizant.springlearn.model.Department">
+        <property name="id" value="3"/>
+        <property name="name" value="Management"/>
+    </bean>
+
+    <!-- skills (reused across employees) -->
+    <bean id="s1" class="com.cognizant.springlearn.model.Skill">
+        <property name="id" value="1"/>
+        <property name="name" value="Java"/>
+    </bean>
+    <bean id="s2" class="com.cognizant.springlearn.model.Skill">
+        <property name="id" value="2"/>
+        <property name="name" value="SQL"/>
+    </bean>
+    <bean id="s3" class="com.cognizant.springlearn.model.Skill">
+        <property name="id" value="3"/>
+        <property name="name" value="Angular"/>
+    </bean>
+
+    <!-- employees -->
+    <bean id="e1" class="com.cognizant.springlearn.model.Employee">
+        <property name="id" value="1"/>
+        <property name="name" value="Vivek"/>
+        <property name="salary" value="35000"/>
+        <property name="permanent" value="true"/>
+        <property name="department" ref="d1"/>
+        <property name="skills">
+            <list>
+                <ref bean="s1"/>
+                <ref bean="s2"/>
+            </list>
+        </property>
+    </bean>
+
+    <bean id="e2" class="com.cognizant.springlearn.model.Employee">
+        <property name="id" value="2"/>
+        <property name="name" value="Ravi"/>
+        <property name="salary" value="45000"/>
+        <property name="permanent" value="true"/>
+        <property name="department" ref="d2"/>
+        <property name="skills">
+            <list>
+                <ref bean="s2"/>
+            </list>
+        </property>
+    </bean>
+
+    <bean id="e3" class="com.cognizant.springlearn.model.Employee">
+        <property name="id" value="3"/>
+        <property name="name" value="Meera"/>
+        <property name="salary" value="55000"/>
+        <property name="permanent" value="false"/>
+        <property name="department" ref="d1"/>
+        <property name="skills">
+            <list>
+                <ref bean="s1"/>
+                <ref bean="s3"/>
+            </list>
+        </property>
+    </bean>
+
+    <bean id="e4" class="com.cognizant.springlearn.model.Employee">
+        <property name="id" value="4"/>
+        <property name="name" value="Priya"/>
+        <property name="salary" value="60000"/>
+        <property name="permanent" value="true"/>
+        <property name="department" ref="d3"/>
+        <property name="skills">
+            <list>
+                <ref bean="s3"/>
+            </list>
+        </property>
+    </bean>
+
+    <bean id="employeeList" class="java.util.ArrayList">
+        <constructor-arg>
+            <list>
+                <ref bean="e1"/>
+                <ref bean="e2"/>
+                <ref bean="e3"/>
+                <ref bean="e4"/>
+            </list>
+        </constructor-arg>
+    </bean>
+
+    <bean id="departmentList" class="java.util.ArrayList">
+        <constructor-arg>
+            <list>
+                <ref bean="d1"/>
+                <ref bean="d2"/>
+                <ref bean="d3"/>
+            </list>
+        </constructor-arg>
+    </bean>
+
+</beans>
+
+
+EmployeeDao.java   (com.cognizant.springlearn.dao)
+--------------------------------------------------
+package com.cognizant.springlearn.dao;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.support.ClassPathXmlApplicationContext;
+import org.springframework.stereotype.Repository;
+
+import com.cognizant.springlearn.model.Employee;
+
+@Repository
+public class EmployeeDao {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(EmployeeDao.class);
+
+    // static so it's loaded once
+    private static ArrayList<Employee> EMPLOYEE_LIST;
+
+    public EmployeeDao() {
+        LOGGER.info("Start");
+        ApplicationContext context =
+                new ClassPathXmlApplicationContext("employee.xml");
+        EMPLOYEE_LIST = (ArrayList<Employee>)
+                context.getBean("employeeList", ArrayList.class);
+        LOGGER.info("End");
+    }
+
+    public List<Employee> getAllEmployees() {
+        return EMPLOYEE_LIST;
+    }
+}
+
+
+
+Hands on 2 - REST service to get all employees
+----------------------------------------------
+
+EmployeeService.java   (com.cognizant.springlearn.service)
+----------------------------------------------------------
+package com.cognizant.springlearn.service;
+
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.cognizant.springlearn.dao.EmployeeDao;
+import com.cognizant.springlearn.model.Employee;
+
+@Service
+public class EmployeeService {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(EmployeeService.class);
+
+    @Autowired
+    private EmployeeDao employeeDao;
+
+    @Transactional
+    public List<Employee> getAllEmployees() {
+        LOGGER.info("Start");
+        List<Employee> list = employeeDao.getAllEmployees();
+        LOGGER.info("End");
+        return list;
+    }
+}
+
+
+EmployeeController.java
+-----------------------
+package com.cognizant.springlearn.controller;
+
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.cognizant.springlearn.model.Employee;
+import com.cognizant.springlearn.service.EmployeeService;
+
+@RestController
+public class EmployeeController {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(EmployeeController.class);
+
+    @Autowired
+    private EmployeeService employeeService;
+
+    @GetMapping("/employees")
+    public List<Employee> getAllEmployees() {
+        LOGGER.info("Start");
+        List<Employee> list = employeeService.getAllEmployees();
+        LOGGER.info("End");
+        return list;
+    }
+}
+
+
+Test in postman:  GET http://localhost:8083/employees
+
+Output:
+[
+    {
+        "id": 1,
+        "name": "Vivek",
+        "salary": 35000.0,
+        "permanent": true,
+        "dateOfBirth": null,
+        "department": { "id": 1, "name": "Development" },
+        "skills": [ {"id":1,"name":"Java"}, {"id":2,"name":"SQL"} ]
+    },
+    {
+        "id": 2,
+        "name": "Ravi",
+        "salary": 45000.0,
+        "permanent": true,
+        "department": { "id": 2, "name": "Finance" },
+        "skills": [ {"id":2,"name":"SQL"} ]
+    },
+    {
+        "id": 3,
+        "name": "Meera",
+        "salary": 55000.0,
+        "permanent": false,
+        "department": { "id": 1, "name": "Development" },
+        "skills": [ {"id":1,"name":"Java"}, {"id":3,"name":"Angular"} ]
+    },
+    {
+        "id": 4,
+        "name": "Priya",
+        "salary": 60000.0,
+        "permanent": true,
+        "department": { "id": 3, "name": "Management" },
+        "skills": [ {"id":3,"name":"Angular"} ]
+    }
+]
+
+
+
+Hands on 3 - Department REST service
+------------------------------------
+
+** same pattern - Dao > Service > Controller **
+
+
+DepartmentDao.java
+------------------
+package com.cognizant.springlearn.dao;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.support.ClassPathXmlApplicationContext;
+import org.springframework.stereotype.Repository;
+
+import com.cognizant.springlearn.model.Department;
+
+@Repository
+public class DepartmentDao {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(DepartmentDao.class);
+
+    private static ArrayList<Department> DEPARTMENT_LIST;
+
+    public DepartmentDao() {
+        LOGGER.info("Start");
+        ApplicationContext ctx =
+                new ClassPathXmlApplicationContext("employee.xml");
+        DEPARTMENT_LIST = (ArrayList<Department>)
+                ctx.getBean("departmentList", ArrayList.class);
+        LOGGER.info("End");
+    }
+
+    public List<Department> getAllDepartments() {
+        return DEPARTMENT_LIST;
+    }
+}
+
+
+DepartmentService.java
+----------------------
+package com.cognizant.springlearn.service;
+
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.cognizant.springlearn.dao.DepartmentDao;
+import com.cognizant.springlearn.model.Department;
+
+@Service
+public class DepartmentService {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(DepartmentService.class);
+
+    @Autowired
+    private DepartmentDao departmentDao;
+
+    @Transactional
+    public List<Department> getAllDepartments() {
+        LOGGER.info("Start");
+        List<Department> list = departmentDao.getAllDepartments();
+        LOGGER.info("End");
+        return list;
+    }
+}
+
+
+DepartmentController.java
+-------------------------
+package com.cognizant.springlearn.controller;
+
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.cognizant.springlearn.model.Department;
+import com.cognizant.springlearn.service.DepartmentService;
+
+@RestController
+public class DepartmentController {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(DepartmentController.class);
+
+    @Autowired
+    private DepartmentService departmentService;
+
+    @GetMapping("/departments")
+    public List<Department> getAllDepartments() {
+        LOGGER.info("Start");
+        List<Department> list = departmentService.getAllDepartments();
+        LOGGER.info("End");
+        return list;
+    }
+}
+
+
+Test:  http://localhost:8083/departments
+
+Output:
+[
+    { "id": 1, "name": "Development" },
+    { "id": 2, "name": "Finance" },
+    { "id": 3, "name": "Management" }
+]
+
+
+** log check: **
+** DepartmentController: Start **
+** DepartmentService: Start **
+** DepartmentDao: (already loaded on startup) **
+** DepartmentService: End **
+** DepartmentController: End **
+
+
+-- end --
