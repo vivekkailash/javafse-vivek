@@ -1,0 +1,212 @@
+ReactJS - Hands on 6
+Vivek
+--------------------
+
+
+** goal: TrainersApp with routing - Home, TrainersList, TrainerDetail **
+** using react-router-dom (v6) **
+
+
+Create project
+--------------
+   npx create-react-app trainersapp
+   cd trainersapp
+
+Install react-router-dom:
+   npm install react-router-dom
+
+
+src/trainer.js   (Trainer class)
+--------------------------------
+// Trainer class - represents one trainer
+class Trainer {
+    constructor(id, name, email, phone, technology, skills) {
+        this.trainerId = id;
+        this.name = name;
+        this.email = email;
+        this.phone = phone;
+        this.technology = technology;
+        this.skills = skills;
+    }
+}
+
+export default Trainer;
+
+
+src/TrainersMock.js   (mock data)
+---------------------------------
+import Trainer from "./trainer";
+
+const trainers = [
+    new Trainer(1, "Vivek Kumar", "vivek@cognizant.com", "9876543210",
+                "React", ["JavaScript", "HTML", "CSS", "React"]),
+    new Trainer(2, "Meera Sharma", "meera@cognizant.com", "9876543211",
+                "Java", ["Java", "Spring", "Hibernate"]),
+    new Trainer(3, "Ravi Prasad", "ravi@cognizant.com", "9876543212",
+                "Python", ["Python", "Django", "Flask"]),
+    new Trainer(4, "Priya Nair", "priya@cognizant.com", "9876543213",
+                "Cloud", ["AWS", "Azure", "Docker", "Kubernetes"])
+];
+
+export default trainers;
+
+
+src/Home.js
+-----------
+import React from "react";
+
+function Home() {
+    return (
+        <div>
+            <h2>Welcome to Cognizant Academy</h2>
+            <p>
+                This is the trainers portal. Click on the "Trainers"
+                link above to view the list of trainers and their
+                expertise.
+            </p>
+        </div>
+    );
+}
+
+export default Home;
+
+
+src/TrainersList.js
+-------------------
+import React from "react";
+import { Link } from "react-router-dom";
+
+// takes trainers as prop
+function TrainersList({ trainers }) {
+    return (
+        <div>
+            <h2>List of Trainers</h2>
+            <ul>
+                {trainers.map(t => (
+                    <li key={t.trainerId}>
+                        {/* clickable link to details page */}
+                        <Link to={"/trainers/" + t.trainerId}>{t.name}</Link>
+                    </li>
+                ))}
+            </ul>
+        </div>
+    );
+}
+
+export default TrainersList;
+
+
+src/TrainerDetails.js
+---------------------
+import React from "react";
+import { useParams } from "react-router-dom";
+import trainers from "./TrainersMock";
+
+function TrainerDetail() {
+
+    // pull the id from the URL
+    const { id } = useParams();
+
+    // find the trainer with that id
+    const trainer = trainers.find(t => t.trainerId === parseInt(id));
+
+    if (!trainer) {
+        return <h3>Trainer not found</h3>;
+    }
+
+    return (
+        <div>
+            <h2>Trainer Details</h2>
+            <p><b>ID:</b> {trainer.trainerId}</p>
+            <p><b>Name:</b> {trainer.name}</p>
+            <p><b>Email:</b> {trainer.email}</p>
+            <p><b>Phone:</b> {trainer.phone}</p>
+            <p><b>Technology:</b> {trainer.technology}</p>
+            <p><b>Skills:</b> {trainer.skills.join(", ")}</p>
+        </div>
+    );
+}
+
+export default TrainerDetail;
+
+
+src/App.js
+----------
+import React from "react";
+import { BrowserRouter, Routes, Route, Link } from "react-router-dom";
+
+import Home from "./Home";
+import TrainersList from "./TrainersList";
+import TrainerDetail from "./TrainerDetails";
+import trainers from "./TrainersMock";
+
+function App() {
+    return (
+        <BrowserRouter>
+            <div>
+                <h1>Cognizant Academy - Trainers Portal</h1>
+
+                {/* navigation menu */}
+                <nav style={{ marginBottom: "20px" }}>
+                    <Link to="/" style={{ marginRight: "15px" }}>Home</Link>
+                    <Link to="/trainers">Trainers</Link>
+                </nav>
+
+                {/* route definitions */}
+                <Routes>
+                    <Route path="/" element={<Home />} />
+                    <Route path="/trainers" element={<TrainersList trainers={trainers} />} />
+                    <Route path="/trainers/:id" element={<TrainerDetail />} />
+                </Routes>
+            </div>
+        </BrowserRouter>
+    );
+}
+
+export default App;
+
+
+Run
+---
+   npm start
+
+
+Output flow:
+
+At http://localhost:3000/
+    Cognizant Academy - Trainers Portal
+    Home | Trainers
+    Welcome to Cognizant Academy
+    This is the trainers portal. Click on...
+
+
+Click "Trainers" -> URL becomes /trainers
+    List of Trainers
+    * Vivek Kumar
+    * Meera Sharma
+    * Ravi Prasad
+    * Priya Nair
+
+
+Click "Vivek Kumar" -> URL becomes /trainers/1
+    Trainer Details
+    ID: 1
+    Name: Vivek Kumar
+    Email: vivek@cognizant.com
+    Phone: 9876543210
+    Technology: React
+    Skills: JavaScript, HTML, CSS, React
+
+
+** key concepts: **
+** BrowserRouter wraps the whole app **
+** Routes contains individual <Route> definitions **
+** Link creates a clickable link (no page reload) **
+** useParams() hook reads dynamic parts of the URL (:id) **
+
+
+** react-router-dom v5 uses <Switch> and history.push - old syntax **
+** react-router-dom v6 uses <Routes> and <Link> - what we used here **
+
+
+-- end --

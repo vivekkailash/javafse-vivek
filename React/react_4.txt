@@ -1,0 +1,136 @@
+ReactJS - Hands on 4
+Vivek
+--------------------
+
+
+** goal: blogapp fetching posts using componentDidMount + error handling **
+
+
+Create project
+--------------
+   npx create-react-app blogapp
+   cd blogapp
+   code .
+
+
+src/Post.js   (simple class - just holds post data)
+---------------------------------------------------
+// Post class - represents one blog post
+class Post {
+    constructor(title, body) {
+        this.title = title;
+        this.body = body;
+    }
+}
+
+export default Post;
+
+
+src/Posts.js   (component that fetches and displays posts)
+----------------------------------------------------------
+import React from "react";
+
+class Posts extends React.Component {
+
+    constructor(props) {
+        super(props);
+        // initial state - empty posts list
+        this.state = {
+            posts: []
+        };
+    }
+
+    // fetch posts from the API
+    loadPosts() {
+        fetch("https://jsonplaceholder.typicode.com/posts")
+            .then(res => res.json())
+            .then(data => {
+                console.log("posts loaded:", data.length);
+                this.setState({ posts: data });
+            })
+            .catch(err => {
+                alert("Error while loading posts: " + err.message);
+            });
+    }
+
+    // runs once when the component is added to the DOM
+    componentDidMount() {
+        console.log("componentDidMount - loading posts...");
+        this.loadPosts();
+    }
+
+    // catches errors from child components
+    componentDidCatch(error, info) {
+        alert("Something went wrong in the component: " + error.message);
+        console.log("componentDidCatch:", error, info);
+    }
+
+    render() {
+        return (
+            <div>
+                <h1>Blog Posts</h1>
+                {this.state.posts.map(post => (
+                    <div key={post.id} style={{ borderBottom: "1px solid #ccc", padding: "10px" }}>
+                        <h3>{post.title}</h3>
+                        <p>{post.body}</p>
+                    </div>
+                ))}
+            </div>
+        );
+    }
+}
+
+export default Posts;
+
+
+src/App.js
+----------
+import React from "react";
+import Posts from "./Posts";
+
+function App() {
+    return (
+        <div>
+            <Posts />
+        </div>
+    );
+}
+
+export default App;
+
+
+Run
+---
+   npm start
+
+
+Output (in browser):
+
+    Blog Posts
+    ---
+    sunt aut facere repellat provident occaecati excepturi optio reprehenderit
+    quia et suscipit suscipit recusandae consequuntur expedita et cum...
+    ---
+    qui est esse
+    est rerum tempore vitae sequi sint nihil reprehenderit dolor beatae...
+    ---
+    ea molestias quasi exercitationem repellat qui ipsa sit aut
+    et iusto sed quo iure voluptatem occaecati omnis eligendi aut ad...
+    ---
+    ... (100 posts total from jsonplaceholder)
+
+
+** flow summary: **
+** 1) component mounts -> componentDidMount() runs **
+** 2) loadPosts() -> fetch API -> setState with posts **
+** 3) render() runs again automatically with new state **
+** 4) if fetch fails -> alert popup (from .catch) **
+** 5) if a child component throws -> componentDidCatch fires **
+
+
+** other lifecycle hooks (just for reference): **
+** componentDidUpdate(prevProps, prevState) - after re-render **
+** componentWillUnmount()  - before removed from DOM (cleanup) **
+
+
+-- end --

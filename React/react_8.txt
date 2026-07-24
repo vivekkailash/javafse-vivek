@@ -1,0 +1,117 @@
+ReactJS - Hands on 8
+Vivek
+--------------------
+
+
+** goal: counterapp with CountPeople - track people entering + exiting a mall **
+** state has entrycount and exitcount **
+
+
+Create project
+--------------
+   npx create-react-app counterapp
+   cd counterapp
+   code .
+
+
+src/CountPeople.js
+------------------
+import React from "react";
+
+class CountPeople extends React.Component {
+
+    // constructor - initialize state
+    constructor(props) {
+        super(props);
+        this.state = {
+            entrycount: 0,
+            exitcount: 0
+        };
+
+        // bind the methods so 'this' works inside them
+        // (alternative: use arrow functions)
+        this.UpdateEntry = this.UpdateEntry.bind(this);
+        this.UpdateExit  = this.UpdateExit.bind(this);
+    }
+
+    // called when Login button clicked
+    UpdateEntry() {
+        // never mutate state directly. always use setState
+        this.setState({ entrycount: this.state.entrycount + 1 });
+    }
+
+    // called when Exit button clicked
+    UpdateExit() {
+        this.setState({ exitcount: this.state.exitcount + 1 });
+    }
+
+    render() {
+        return (
+            <div>
+                <h2>People Counter - Mall Entry/Exit</h2>
+
+                <p>Number of people entered: <b>{this.state.entrycount}</b></p>
+                <p>Number of people exited: <b>{this.state.exitcount}</b></p>
+
+                <button onClick={this.UpdateEntry}>Login</button>
+                &nbsp;
+                <button onClick={this.UpdateExit}>Exit</button>
+            </div>
+        );
+    }
+}
+
+export default CountPeople;
+
+
+src/App.js
+----------
+import React from "react";
+import CountPeople from "./CountPeople";
+
+function App() {
+    return (
+        <div>
+            <CountPeople />
+        </div>
+    );
+}
+
+export default App;
+
+
+Run
+---
+   npm start
+
+
+Output (initial):
+
+    People Counter - Mall Entry/Exit
+
+    Number of people entered: 0
+    Number of people exited: 0
+
+    [Login]  [Exit]
+
+
+After clicking Login 3 times and Exit 1 time:
+
+    Number of people entered: 3
+    Number of people exited: 1
+
+
+** key notes: **
+** - state = internal data owned by the component **
+** - initial state is set in the constructor **
+** - NEVER do this.state.entrycount = x   (won't re-render) **
+** - always use this.setState({...})       (triggers re-render) **
+** - bind the methods in constructor or use arrow function methods **
+
+
+** with arrow function syntax you can skip the bind: **
+**   UpdateEntry = () => { this.setState(...) } **
+** but the classic bind approach is more common in tutorials **
+
+
+-- end --

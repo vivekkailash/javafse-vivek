@@ -1,0 +1,113 @@
+ReactJS - Hands on 2
+Vivek
+--------------------
+
+
+** goal: StudentApp with three components - Home, About, Contact **
+
+
+Create project
+--------------
+   npx create-react-app studentapp
+   cd studentapp
+   code .
+
+
+** create a folder src/Components (with capital C to match spec) **
+** add three files inside it **
+
+
+src/Components/Home.js
+----------------------
+import React from "react";
+
+// Home component - class based
+class Home extends React.Component {
+    render() {
+        return (
+            <div>
+                <h2>Welcome to the Home page of Student Management Portal</h2>
+            </div>
+        );
+    }
+}
+
+export default Home;
+
+
+src/Components/About.js
+-----------------------
+import React from "react";
+
+class About extends React.Component {
+    render() {
+        return (
+            <div>
+                <h2>Welcome to the About page of the Student Management Portal</h2>
+            </div>
+        );
+    }
+}
+
+export default About;
+
+
+src/Components/Contact.js
+-------------------------
+import React from "react";
+
+class Contact extends React.Component {
+    render() {
+        return (
+            <div>
+                <h2>Welcome to the Contact page of the Student Management Portal</h2>
+            </div>
+        );
+    }
+}
+
+export default Contact;
+
+
+src/App.js  (call all three)
+----------------------------
+import React from "react";
+import Home from "./Components/Home";
+import About from "./Components/About";
+import Contact from "./Components/Contact";
+
+function App() {
+    return (
+        <div>
+            <h1>Student Management Portal</h1>
+            <Home />
+            <About />
+            <Contact />
+        </div>
+    );
+}
+
+export default App;
+
+
+Run
+---
+   npm start
+
+Open http://localhost:3000
+
+
+Output (in browser):
+
+    Student Management Portal
+    Welcome to the Home page of Student Management Portal
+    Welcome to the About page of the Student Management Portal
+    Welcome to the Contact page of the Student Management Portal
+
+
+** each component is like a mini-page. reusable and independent **
+** notice import + export - each file exports its component,
+** App.js imports and uses them as <Home />, <About />, <Contact /> **
+
+
+-- end --

@@ -1,0 +1,77 @@
+ReactJS - Hands on 1
+Vivek
+--------------------
+
+
+** goal: setup react env + create myfirstreact showing a heading **
+
+
+Setup steps (one time - do this before starting)
+------------------------------------------------
+
+1) install Node.js from https://nodejs.org/en/download/
+   (npm comes bundled with it)
+
+2) verify install (in cmd/terminal):
+   node -v      -> v18.x.x  or higher
+   npm -v       -> 9.x.x    or higher
+
+3) install create-react-app globally:
+   npm install -g create-react-app
+
+
+Create the app
+--------------
+
+Open cmd/terminal in the folder where you want the project, then:
+
+   npx create-react-app myfirstreact
+
+** takes a couple of minutes - downloads a lot of stuff **
+
+Then navigate into the folder:
+   cd myfirstreact
+
+Open in VS Code:
+   code .
+
+
+Edit src/App.js
+---------------
+
+** delete everything currently in App.js and replace with this **
+
+import React from "react";
+import "./App.css";
+
+function App() {
+    return (
+        <div className="App">
+            <h1>welcome to the first session of React</h1>
+        </div>
+    );
+}
+
+export default App;
+
+
+Run
+---
+
+In the terminal (inside the myfirstreact folder):
+   npm start
+
+** browser opens automatically at localhost:3000 **
+** if it doesn't, manually open http://localhost:3000 **
+
+
+Output (in browser):
+
+    welcome to the first session of React
+
+
+** the h1 makes it a big heading **
+** every time you save App.js the page auto-reloads (hot reload) **
+
+
+-- end --

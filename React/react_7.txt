@@ -1,0 +1,141 @@
+ReactJS - Hands on 7
+Vivek
+--------------------
+
+
+** goal: shoppingapp with OnlineShopping component holding array of Cart **
+** demo of props passing between components **
+
+
+Create project
+--------------
+   npx create-react-app shoppingapp
+   cd shoppingapp
+   code .
+
+
+src/Cart.js
+-----------
+import React from "react";
+
+// Cart component - just displays one item
+class Cart extends React.Component {
+    render() {
+        // read props sent from parent
+        const { itemname, price } = this.props;
+        return (
+            <tr>
+                <td>{itemname}</td>
+                <td>Rs. {price}</td>
+            </tr>
+        );
+    }
+}
+
+export default Cart;
+
+
+src/OnlineShopping.js
+---------------------
+import React from "react";
+import Cart from "./Cart";
+
+class OnlineShopping extends React.Component {
+
+    constructor(props) {
+        super(props);
+
+        // array of cart items - initialize 5
+        this.items = [
+            { id: 1, itemname: "Mobile",   price: 15000 },
+            { id: 2, itemname: "Laptop",   price: 55000 },
+            { id: 3, itemname: "Headphone", price: 2500 },
+            { id: 4, itemname: "Keyboard", price: 1200 },
+            { id: 5, itemname: "Mouse",    price: 700 }
+        ];
+    }
+
+    render() {
+        return (
+            <div>
+                <h2>Online Shopping Cart</h2>
+                <table border="1" cellPadding="5">
+                    <thead>
+                        <tr>
+                            <th>Item Name</th>
+                            <th>Price</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {/* loop through items - pass each as props to Cart */}
+                        {this.items.map(item => (
+                            <Cart
+                                key={item.id}
+                                itemname={item.itemname}
+                                price={item.price}
+                            />
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        );
+    }
+}
+
+// default props - if parent doesn't send any, these are used
+OnlineShopping.defaultProps = {
+    shopName: "Vivek's Online Store"
+};
+
+export default OnlineShopping;
+
+
+src/App.js
+----------
+import React from "react";
+import OnlineShopping from "./OnlineShopping";
+
+function App() {
+    return (
+        <div>
+            <OnlineShopping />
+        </div>
+    );
+}
+
+export default App;
+
+
+Run
+---
+   npm start
+
+Output (in browser):
+
+    Online Shopping Cart
+
+    +----------+----------+
+    | Item Name| Price    |
+    +----------+----------+
+    | Mobile   | Rs. 15000|
+    | Laptop   | Rs. 55000|
+    | Headphone| Rs. 2500 |
+    | Keyboard | Rs. 1200 |
+    | Mouse    | Rs. 700  |
+    +----------+----------+
+
+
+** key concepts: **
+** - props = data passed from parent to child **
+** - Cart doesn't know or care where its data comes from **
+** - Cart reads it via this.props.itemname / this.props.price **
+** - key prop is React's way of tracking list items **
+** - props are READ-ONLY inside the child (immutable) **
+
+
+** state vs props difference: **
+** - state = owned by component itself, can change over time **
+** - props = passed IN from outside, child can't modify them **
+
+
+-- end --

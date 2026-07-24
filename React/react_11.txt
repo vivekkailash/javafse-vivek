@@ -1,0 +1,223 @@
+ReactJS - Hands on 11
+Vivek
+---------------------
+
+
+** goal: eventexamplesapp - counter with Increment/Decrement + CurrencyConverter **
+
+
+Create project
+--------------
+   npx create-react-app eventexamplesapp
+   cd eventexamplesapp
+   code .
+
+
+src/Counter.js   (counter + say welcome + synthetic event)
+----------------------------------------------------------
+import React from "react";
+
+class Counter extends React.Component {
+
+    constructor(props) {
+        super(props);
+        this.state = { count: 0 };
+
+        // bind methods
+        this.increment  = this.increment.bind(this);
+        this.decrement  = this.decrement.bind(this);
+        this.sayHello   = this.sayHello.bind(this);
+        this.sayWelcome = this.sayWelcome.bind(this);
+        this.onPress    = this.onPress.bind(this);
+    }
+
+    // increment button invokes multiple methods
+    increment() {
+        this.updateCount();
+        this.sayHello();
+    }
+
+    updateCount() {
+        this.setState({ count: this.state.count + 1 });
+    }
+
+    sayHello() {
+        console.log("Hello, welcome to React events!");
+    }
+
+    decrement() {
+        this.setState({ count: this.state.count - 1 });
+    }
+
+    // takes an argument
+    sayWelcome(msg) {
+        alert(msg);
+    }
+
+    // synthetic event handler
+    // (e) is the React SyntheticEvent - a wrapper around the native event
+    onPress(e) {
+        console.log("Synthetic event fired:", e.type);
+        alert("I was clicked");
+    }
+
+    render() {
+        return (
+            <div style={{ padding: "20px" }}>
+                <h2>Counter</h2>
+                <p>Current Count: {this.state.count}</p>
+
+                <button onClick={this.increment}>Increment</button>
+                &nbsp;
+                <button onClick={this.decrement}>Decrement</button>
+
+                <br /><br />
+
+                {/* arrow function used to pass an argument */}
+                <button onClick={() => this.sayWelcome("welcome")}>Say Welcome</button>
+
+                <br /><br />
+
+                {/* onClick is the synthetic event - React normalizes across browsers */}
+                <button onClick={this.onPress}>Click Me (synthetic)</button>
+            </div>
+        );
+    }
+}
+
+export default Counter;
+
+
+src/CurrencyConverter.js
+------------------------
+import React from "react";
+
+class CurrencyConverter extends React.Component {
+
+    constructor(props) {
+        super(props);
+        this.state = {
+            rupees: 0,
+            euros: 0
+        };
+        this.handleChange = this.handleChange.bind(this);
+        this.handleSubmit = this.handleSubmit.bind(this);
+    }
+
+    // update rupees whenever input changes
+    handleChange(e) {
+        this.setState({ rupees: e.target.value });
+    }
+
+    // convert when Convert button clicked
+    handleSubmit(e) {
+        e.preventDefault();  // stop the default form submit
+        // approx: 1 EUR = 90 INR (rate as of writing)
+        const eurRate = 90;
+        const converted = this.state.rupees / eurRate;
+        this.setState({ euros: converted.toFixed(2) });
+    }
+
+    render() {
+        return (
+            <div style={{ padding: "20px", borderTop: "1px solid #ccc" }}>
+                <h2>Currency Converter</h2>
+
+                <label>Indian Rupees: </label>
+                <input
+                    type="number"
+                    value={this.state.rupees}
+                    onChange={this.handleChange}
+                />
+                <br /><br />
+
+                <button onClick={this.handleSubmit}>Convert</button>
+
+                <p>
+                    Rs. {this.state.rupees} = &euro; {this.state.euros}
+                </p>
+            </div>
+        );
+    }
+}
+
+export default CurrencyConverter;
+
+
+src/App.js
+----------
+import React from "react";
+import Counter from "./Counter";
+import CurrencyConverter from "./CurrencyConverter";
+
+function App() {
+    return (
+        <div>
+            <h1>React Events Demo - Vivek</h1>
+            <Counter />
+            <CurrencyConverter />
+        </div>
+    );
+}
+
+export default App;
+
+
+Run
+---
+   npm start
+
+
+Output (initial):
+
+    React Events Demo - Vivek
+
+    Counter
+    Current Count: 0
+    [Increment]  [Decrement]
+
+    [Say Welcome]
+
+    [Click Me (synthetic)]
+
+    -------------------------
+    Currency Converter
+    Indian Rupees: [ 0 ]
+    [Convert]
+    Rs. 0 = € 0
+
+
+After clicking Increment 3 times:
+    Current Count: 3
+    (console log shows "Hello, welcome to React events!" 3 times)
+
+
+Click "Say Welcome":
+    alert popup -> "welcome"
+
+
+Click "Click Me (synthetic)":
+    console log -> "Synthetic event fired: click"
+    alert popup -> "I was clicked"
+
+
+Type 9000 in Rupees, click Convert:
+    Rs. 9000 = € 100.00
+
+
+** key notes on React events: **
+** - use camelCase: onClick, onChange, onSubmit (not onclick) **
+** - handler receives a SyntheticEvent, not the native DOM event **
+** - SyntheticEvent works the same across all browsers **
+** - use e.preventDefault() to stop default browser action **
+** - to pass argument use arrow function:  onClick={() => fn("x")} **
+** - direct pass  onClick={fn("x")}  would call fn IMMEDIATELY (bug!) **
+
+
+** binding methods: **
+** - constructor:  this.foo = this.foo.bind(this) **
+** - or arrow function:  foo = () => { ... } **
+** - or inline:  onClick={() => this.foo()} **
+
+
+-- end --

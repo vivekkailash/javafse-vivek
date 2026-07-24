@@ -1,0 +1,151 @@
+ReactJS - Hands on 10
+Vivek
+---------------------
+
+
+** goal: officespacerentalapp using JSX - elements, attributes, inline CSS **
+** rent color: red if < 60000, green if > 60000 **
+
+
+Create project
+--------------
+   npx create-react-app officespacerentalapp
+   cd officespacerentalapp
+   code .
+
+
+src/App.js
+----------
+import React from "react";
+
+// list of offices - array of objects
+const offices = [
+    {
+        id: 1,
+        name: "Prestige Tech Park",
+        rent: 75000,
+        address: "Sarjapur Road, Bengaluru",
+        image: "https://picsum.photos/id/1015/300/200"
+    },
+    {
+        id: 2,
+        name: "DLF Cyber Hub",
+        rent: 55000,
+        address: "Gurgaon, Haryana",
+        image: "https://picsum.photos/id/1016/300/200"
+    },
+    {
+        id: 3,
+        name: "Marina Bay Business Suite",
+        rent: 90000,
+        address: "Nungambakkam, Chennai",
+        image: "https://picsum.photos/id/1018/300/200"
+    },
+    {
+        id: 4,
+        name: "SunSpace Coworking",
+        rent: 45000,
+        address: "Kondapur, Hyderabad",
+        image: "https://picsum.photos/id/1019/300/200"
+    }
+];
+
+// styles as JS objects (inline)
+const headingStyle = {
+    color: "navy",
+    textAlign: "center",
+    fontFamily: "Arial"
+};
+
+const cardStyle = {
+    border: "1px solid #ccc",
+    borderRadius: "8px",
+    padding: "15px",
+    margin: "10px",
+    width: "300px",
+    display: "inline-block",
+    verticalAlign: "top"
+};
+
+// function returns a style object based on the rent value
+function rentStyle(rent) {
+    return {
+        color: rent > 60000 ? "green" : "red",
+        fontWeight: "bold"
+    };
+}
+
+
+function App() {
+    return (
+        <div>
+            {/* heading element */}
+            <h1 style={headingStyle}>Office Space Rental Portal</h1>
+
+            <div style={{ textAlign: "center" }}>
+                {/* loop through the offices list */}
+                {offices.map(o => (
+                    <div key={o.id} style={cardStyle}>
+                        {/* image attribute - src, alt */}
+                        <img src={o.image} alt={o.name} width="100%" />
+
+                        <h3>{o.name}</h3>
+                        <p>{o.address}</p>
+
+                        {/* conditional inline CSS - green if > 60k, red if < 60k */}
+                        <p>
+                            Rent: <span style={rentStyle(o.rent)}>Rs. {o.rent}</span>
+                        </p>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+export default App;
+
+
+Run
+---
+   npm start
+
+
+Output (in browser):
+
+    Office Space Rental Portal        (navy blue, centered)
+
+    +-----------------+   +-----------------+
+    | [ image ]       |   | [ image ]       |
+    | Prestige Tech   |   | DLF Cyber Hub   |
+    | Sarjapur Road,  |   | Gurgaon, Haryana|
+    | Bengaluru       |   | Rent: Rs. 55000 |
+    | Rent: Rs. 75000 |   | (in RED)        |
+    | (in GREEN)      |   |                 |
+    +-----------------+   +-----------------+
+
+    +-----------------+   +-----------------+
+    | [ image ]       |   | [ image ]       |
+    | Marina Bay ...  |   | SunSpace ...    |
+    | Chennai         |   | Hyderabad       |
+    | Rent: Rs. 90000 |   | Rent: Rs. 45000 |
+    | (in GREEN)      |   | (in RED)        |
+    +-----------------+   +-----------------+
+
+
+** key JSX notes: **
+** - JSX = HTML-like syntax inside JavaScript **
+** - Babel compiles it to React.createElement() calls **
+** - use className instead of class (class is a JS keyword) **
+** - use camelCase for attributes: onClick, textAlign, backgroundColor **
+** - style takes a JS OBJECT, not a string:  style={{ color:"red" }} **
+** - use {} to embed JS expressions inside JSX **
+
+
+** conditional rendering options: **
+** - ternary:   {rent > 60000 ? "green" : "red"} **
+** - short circuit:  {isVip && <span>VIP</span>} **
+** - variable:  const cls = ...; then use {cls} **
+
+
+-- end --
