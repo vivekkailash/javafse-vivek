@@ -1,0 +1,359 @@
+Git - Hands on 4
+Vivek
+----------------
+
+
+** goal: create a conflict on purpose and resolve it using 3-way merge **
+
+
+Setup - verify master is clean
+------------------------------
+
+$ cd GitDemo
+$ git status
+
+Output:
+On branch master
+nothing to commit, working tree clean
+
+
+
+Create GitWork branch + add hello.xml
+-------------------------------------
+
+$ git checkout -b GitWork
+
+Output:
+Switched to a new branch 'GitWork'
+
+
+$ notepad++ hello.xml
+
+** type this content in notepad++ and save: **
+
+<greeting>
+    <message>Hello from GitWork branch by Vivek</message>
+</greeting>
+
+
+$ git status
+
+Output:
+On branch GitWork
+Untracked files:
+        hello.xml
+
+
+Add + commit:
+$ git add hello.xml
+$ git commit -m "Added hello.xml on GitWork branch"
+
+Output:
+[GitWork b2e5f7a] Added hello.xml on GitWork branch
+ 1 file changed, 3 insertions(+)
+ create mode 100644 hello.xml
+
+
+
+Switch to master + add DIFFERENT hello.xml
+------------------------------------------
+
+$ git checkout master
+
+Output:
+Switched to branch 'master'
+
+
+$ ls
+
+Output:
+branch_file.txt  script.js  welcome.txt
+
+** notice hello.xml is NOT here - it only exists on GitWork **
+
+
+$ notepad++ hello.xml
+
+** type this DIFFERENT content and save: **
+
+<greeting>
+    <message>Hello from master branch - different content</message>
+</greeting>
+
+
+$ git add hello.xml
+$ git commit -m "Added hello.xml on master with different content"
+
+Output:
+[master 9f1c4b8] Added hello.xml on master with different content
+ 1 file changed, 3 insertions(+)
+ create mode 100644 hello.xml
+
+
+
+View the log - both branches diverged
+-------------------------------------
+
+$ git log --oneline --graph --decorate --all
+
+Output:
+* 9f1c4b8 (HEAD -> master) Added hello.xml on master with different content
+| * b2e5f7a (GitWork) Added hello.xml on GitWork branch
+|/
+* 7c9d3e2 Added branch_file.txt and script.js on GitNewBranch
+* 4b8e921 Added .gitignore to skip log files
+* a3f2b1c Adding welcome file
+
+
+** the branches split - see the fork in the graph? **
+** master and GitWork both added hello.xml with different content **
+
+
+
+Check the differences
+---------------------
+
+$ git diff master GitWork
+
+Output:
+diff --git a/hello.xml b/hello.xml
+index e3d5f8a..3b7c2a9 100644
+--- a/hello.xml
++++ b/hello.xml
+@@ -1,3 +1,3 @@
+ <greeting>
+-    <message>Hello from master branch - different content</message>
++    <message>Hello from GitWork branch by Vivek</message>
+ </greeting>
+
+
+Visual diff with P4Merge:
+$ git difftool master GitWork
+
+** P4Merge opens - shows the same conflict visually **
+
+
+
+Try to merge -> CONFLICT
+------------------------
+
+$ git merge GitWork
+
+Output:
+Auto-merging hello.xml
+CONFLICT (add/add): Merge conflict in hello.xml
+Automatic merge failed; fix conflicts and then commit the result.
+
+
+$ git status
+
+Output:
+On branch master
+You have unmerged paths.
+  (fix conflicts and run "git commit")
+
+Unmerged paths:
+  (use "git add <file>..." to mark resolution)
+        both added:      hello.xml
+
+
+
+Look at the conflict markers
+----------------------------
+
+$ cat hello.xml
+
+Output:
+<greeting>
+<<<<<<< HEAD
+    <message>Hello from master branch - different content</message>
+=======
+    <message>Hello from GitWork branch by Vivek</message>
+>>>>>>> GitWork
+</greeting>
+
+
+** git adds markers so you can see BOTH versions: **
+** <<<<<<< HEAD       = start of "our" version (master) **
+** =======            = separator **
+** >>>>>>> GitWork    = end of "their" version (GitWork) **
+
+
+
+Resolve using 3-way merge tool (P4Merge)
+----------------------------------------
+
+$ git mergetool
+
+Output:
+Merging:
+hello.xml
+
+Normal merge conflict for 'hello.xml':
+  {local}: modified file
+  {remote}: modified file
+Hit return to start merge resolution tool (p4merge):
+
+
+** press Enter - P4Merge opens with 3 panels: **
+**   top-left  = LOCAL  (master version)     **
+**   top-right = REMOTE (GitWork version)    **
+**   top-mid   = BASE   (common ancestor)    **
+**   bottom    = RESULT (what will be saved) **
+
+
+** pick lines from each side, or type your own text **
+** for this demo let's keep the GitWork version + add my name **
+
+Final result in P4Merge (bottom panel):
+<greeting>
+    <message>Hello from GitWork branch by Vivek</message>
+</greeting>
+
+
+** save and close P4Merge **
+
+
+$ ls
+
+Output:
+branch_file.txt  hello.xml  hello.xml.orig  script.js  welcome.txt
+
+
+** notice hello.xml.orig - that's the backup that mergetool created **
+
+
+$ cat hello.xml
+
+Output:
+<greeting>
+    <message>Hello from GitWork branch by Vivek</message>
+</greeting>
+
+
+** conflict markers are gone - clean file **
+
+
+
+Commit the resolution
+---------------------
+
+$ git add hello.xml
+$ git commit -m "Resolved merge conflict in hello.xml - kept GitWork content"
+
+Output:
+[master 4e8a1d2] Resolved merge conflict in hello.xml - kept GitWork content
+
+
+$ git status
+
+Output:
+On branch master
+Untracked files:
+        hello.xml.orig
+
+nothing added to commit but untracked files present
+
+
+** the .orig backup file is left behind **
+
+
+
+Add backup files to .gitignore
+------------------------------
+
+$ notepad++ .gitignore
+
+** add this line at the bottom: **
+*.orig
+
+** save and close **
+
+
+$ git status
+
+Output:
+On branch master
+Changes not staged for commit:
+        modified:   .gitignore
+nothing added to commit but untracked files present
+
+
+** hello.xml.orig is gone from the list - ignored now **
+
+
+$ git add .gitignore
+$ git commit -m "Added *.orig to gitignore for merge backups"
+
+Output:
+[master 8d3f5c1] Added *.orig to gitignore for merge backups
+
+
+
+List branches + delete the merged one
+-------------------------------------
+
+$ git branch
+
+Output:
+  GitWork
+* master
+
+
+$ git branch -d GitWork
+
+Output:
+Deleted branch GitWork (was b2e5f7a).
+
+
+$ git branch
+
+Output:
+* master
+
+
+
+Final log
+---------
+
+$ git log --oneline --graph --decorate
+
+Output:
+* 8d3f5c1 (HEAD -> master) Added *.orig to gitignore for merge backups
+* 4e8a1d2 Resolved merge conflict in hello.xml - kept GitWork content
+|\
+| * b2e5f7a Added hello.xml on GitWork branch
+* | 9f1c4b8 Added hello.xml on master with different content
+|/
+* 7c9d3e2 Added branch_file.txt and script.js on GitNewBranch
+* 4b8e921 Added .gitignore to skip log files
+* a3f2b1c Adding welcome file
+
+
+** the merge commit (4e8a1d2) joins the two lines back together **
+
+
+
+Push everything to remote
+-------------------------
+
+$ git push origin master
+
+Output:
+Enumerating objects: 12, done.
+...
+To https://gitlab.com/vivek/GitDemo.git
+   9f1c4b8..8d3f5c1  master -> master
+
+
+
+** conflict-handling summary: **
+**   1) merge fails -> "Automatic merge failed" **
+**   2) git status shows unmerged paths **
+**   3) open the file, look at <<< === >>> markers **
+**   4) EITHER edit manually OR run `git mergetool` for 3-way GUI **
+**   5) git add <file> + git commit to finish the merge **
+**   6) delete .orig backup or add to .gitignore **
+
+
+-- end --

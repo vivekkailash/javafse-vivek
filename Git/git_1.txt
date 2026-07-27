@@ -1,0 +1,224 @@
+Git - Hands on 1
+Vivek
+----------------
+
+
+** goal: install and configure git, integrate notepad++ as editor, **
+** create a repo and push to gitlab **
+
+
+Step 1 - Git configuration
+--------------------------
+
+** open Git Bash **
+
+
+Check if git is installed:
+$ git --version
+
+Output:
+git version 2.41.0.windows.1
+
+
+Set global user id and email:
+$ git config --global user.name "Vivek"
+$ git config --global user.email "vivek@example.com"
+
+
+Check if config is set:
+$ git config --list
+
+Output:
+user.name=Vivek
+user.email=vivek@example.com
+core.autocrlf=true
+core.editor=notepad
+...
+
+
+
+Step 2 - Set notepad++ as default editor
+----------------------------------------
+
+** first check if notepad++ is available from git bash **
+
+$ notepad++
+
+Output:
+bash: notepad++: command not found
+
+
+** so notepad++.exe is NOT in the PATH. add it via env variables. **
+
+Steps:
+Control Panel -> System -> Advanced System settings
+Advanced tab -> Environment variables
+Under "User variables" find "Path" -> Edit -> New
+Add:  C:\Program Files\Notepad++
+OK, OK, OK
+
+
+** now close and reopen git bash and try again **
+
+$ notepad++
+
+(notepad++ window opens)
+
+
+Create alias in .bashrc:
+$ notepad++ ~/.bashrc
+
+Type this inside notepad++:
+alias npp='notepad++.exe'
+
+Save and close.
+
+
+Reload:
+$ source ~/.bashrc
+
+
+Set as default git editor:
+$ git config --global core.editor "notepad++.exe -multiInst -notabbar -nosession -noPlugin"
+
+
+Verify:
+$ git config --global -e
+
+Output (opens .gitconfig in notepad++):
+[user]
+    name = Vivek
+    email = vivek@example.com
+[core]
+    editor = notepad++.exe -multiInst -notabbar -nosession -noPlugin
+
+
+
+Step 3 - Add a file to a source code repository
+-----------------------------------------------
+
+Create project folder + init:
+$ mkdir GitDemo
+$ cd GitDemo
+$ git init
+
+Output:
+Initialized empty Git repository in D:/GitDemo/.git/
+
+
+Verify hidden .git folder created:
+$ ls -a
+
+Output:
+./  ../  .git/
+
+
+Create a file with content:
+$ echo "Welcome to Git demo by Vivek" > welcome.txt
+
+
+Verify file created:
+$ ls
+
+Output:
+welcome.txt
+
+
+Check contents:
+$ cat welcome.txt
+
+Output:
+Welcome to Git demo by Vivek
+
+
+Check status:
+$ git status
+
+Output:
+On branch master
+
+No commits yet
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+        welcome.txt
+
+nothing added to commit but untracked files present (use "git add" to track)
+
+
+Track the file:
+$ git add welcome.txt
+
+
+Check status again:
+$ git status
+
+Output:
+On branch master
+
+No commits yet
+
+Changes to be committed:
+  (use "git rm --cached <file>..." to unstage)
+        new file:   welcome.txt
+
+
+Commit with multi-line message (opens notepad++):
+$ git commit
+
+** notepad++ opens - type this: **
+Adding welcome file
+This is the first commit for the GitDemo project
+by Vivek
+
+** save and close notepad++ **
+
+Output:
+[master (root-commit) a3f2b1c] Adding welcome file
+ 1 file changed, 1 insertion(+)
+ create mode 100644 welcome.txt
+
+
+
+Push to remote (GitLab)
+-----------------------
+
+** first: signup at gitlab.com **
+** create new project called "GitDemo" (Private is fine) **
+** copy the repo URL **
+
+
+Add remote:
+$ git remote add origin https://gitlab.com/vivek/GitDemo.git
+
+
+Pull from remote (first time - may fail if empty):
+$ git pull origin master
+
+Output:
+warning: no common commits
+From https://gitlab.com/vivek/GitDemo
+ * branch            master     -> FETCH_HEAD
+fatal: refusing to merge unrelated histories
+
+
+** if this happens: **
+$ git pull origin master --allow-unrelated-histories
+
+
+Push to remote:
+$ git push origin master
+
+Output:
+Enumerating objects: 3, done.
+Counting objects: 100% (3/3), done.
+Writing objects: 100% (3/3), 245 bytes | 245.00 KiB/s, done.
+Total 3 (delta 0), reused 0 (delta 0)
+To https://gitlab.com/vivek/GitDemo.git
+ * [new branch]      master -> master
+
+
+** open the gitlab project page in browser - welcome.txt is now there **
+
+
+-- end --

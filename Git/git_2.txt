@@ -1,0 +1,142 @@
+Git - Hands on 2
+Vivek
+----------------
+
+
+** goal: use .gitignore to skip .log files and log/ folder from being tracked **
+
+
+Setup - use the GitDemo repo from hands on 1
+--------------------------------------------
+
+$ cd GitDemo
+$ git status
+
+Output:
+On branch master
+nothing to commit, working tree clean
+
+
+
+Create a .log file and a log folder
+-----------------------------------
+
+$ echo "some log line" > app.log
+$ mkdir log
+$ echo "another log entry" > log/error.txt
+
+
+Check status:
+$ git status
+
+Output:
+On branch master
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+        app.log
+        log/
+
+nothing added to commit but untracked files present
+
+
+** without .gitignore these WOULD get tracked if we ran git add . **
+
+
+
+Create .gitignore
+-----------------
+
+$ notepad++ .gitignore
+
+** in notepad++, add these lines: **
+
+# ignore all .log files anywhere
+*.log
+
+# ignore the whole log folder
+log/
+
+** save and close **
+
+
+Check status again:
+$ git status
+
+Output:
+On branch master
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+        .gitignore
+
+nothing added to commit but untracked files present
+
+
+** notice app.log and log/ are GONE from the list - ignored! **
+** only .gitignore itself needs to be committed **
+
+
+
+Try to force add ignored file (just to check)
+---------------------------------------------
+
+$ git add app.log
+
+Output:
+The following paths are ignored by one of your .gitignore files:
+app.log
+hint: Use -f if you really want to add them.
+
+
+** git actually stops you from adding ignored files by mistake. nice. **
+
+
+
+Commit .gitignore
+-----------------
+
+$ git add .gitignore
+$ git commit -m "Added .gitignore to skip log files"
+
+Output:
+[master 4b8e921] Added .gitignore to skip log files
+ 1 file changed, 5 insertions(+)
+ create mode 100644 .gitignore
+
+
+$ git status
+
+Output:
+On branch master
+nothing to commit, working tree clean
+
+
+
+Push to remote
+--------------
+
+$ git push origin master
+
+Output:
+Enumerating objects: 4, done.
+...
+To https://gitlab.com/vivek/GitDemo.git
+   a3f2b1c..4b8e921  master -> master
+
+
+
+** verification: on gitlab website check the repo **
+** .gitignore is there, but app.log and log/ are NOT **
+
+
+** common .gitignore patterns worth knowing: **
+**   *.log         - any .log file **
+**   log/          - the log folder **
+**   node_modules/ - the node_modules folder (js projects) **
+**   target/       - maven build folder **
+**   .idea/        - IntelliJ config folder **
+**   .DS_Store     - Mac system junk **
+
+
+-- end --

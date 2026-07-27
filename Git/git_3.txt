@@ -1,0 +1,230 @@
+Git - Hands on 3
+Vivek
+----------------
+
+
+** goal: create branch, make changes, merge to master **
+
+
+Setup - continue from GitDemo repo
+----------------------------------
+
+$ cd GitDemo
+$ git status
+
+Output:
+On branch master
+nothing to commit, working tree clean
+
+
+
+Branching
+---------
+
+Create a new branch:
+$ git branch GitNewBranch
+
+
+List all local branches:
+$ git branch
+
+Output:
+  GitNewBranch
+* master
+
+
+** the * shows the current branch (master) **
+
+
+List local + remote:
+$ git branch -a
+
+Output:
+  GitNewBranch
+* master
+  remotes/origin/master
+
+
+Switch to the new branch:
+$ git checkout GitNewBranch
+
+Output:
+Switched to branch 'GitNewBranch'
+
+
+$ git branch
+
+Output:
+* GitNewBranch
+  master
+
+
+** now * is on GitNewBranch - we're working there **
+
+
+Add some files:
+$ echo "This is branch work by Vivek" > branch_file.txt
+$ echo "console.log('hello from branch')" > script.js
+
+
+$ git status
+
+Output:
+On branch GitNewBranch
+Untracked files:
+        branch_file.txt
+        script.js
+
+
+Commit changes:
+$ git add .
+$ git commit -m "Added branch_file.txt and script.js on GitNewBranch"
+
+Output:
+[GitNewBranch 7c9d3e2] Added branch_file.txt and script.js on GitNewBranch
+ 2 files changed, 2 insertions(+)
+ create mode 100644 branch_file.txt
+ create mode 100644 script.js
+
+
+$ git status
+
+Output:
+On branch GitNewBranch
+nothing to commit, working tree clean
+
+
+
+Merging
+-------
+
+Switch to master:
+$ git checkout master
+
+Output:
+Switched to branch 'master'
+
+
+** notice branch_file.txt and script.js are NOT in the folder now **
+** because they only exist on GitNewBranch **
+
+$ ls
+
+Output:
+welcome.txt
+
+
+List command-line diff between master and branch:
+$ git diff master GitNewBranch
+
+Output:
+diff --git a/branch_file.txt b/branch_file.txt
+new file mode 100644
+index 0000000..3a5c8e1
+--- /dev/null
++++ b/branch_file.txt
+@@ -0,0 +1 @@
++This is branch work by Vivek
+diff --git a/script.js b/script.js
+new file mode 100644
+index 0000000..9b7a2f4
+--- /dev/null
++++ b/script.js
+@@ -0,0 +1 @@
++console.log('hello from branch')
+
+
+Visual diff using P4Merge:
+$ git difftool master GitNewBranch
+
+** P4Merge opens showing side-by-side comparison **
+** left = master (empty on new files), right = GitNewBranch (with new files) **
+
+
+Merge the branch into master:
+$ git merge GitNewBranch
+
+Output:
+Updating 4b8e921..7c9d3e2
+Fast-forward
+ branch_file.txt | 1 +
+ script.js       | 1 +
+ 2 files changed, 2 insertions(+)
+ create mode 100644 branch_file.txt
+ create mode 100644 script.js
+
+
+** "Fast-forward" means master just moved up to catch the branch **
+** since master didn't change while GitNewBranch was ahead **
+
+
+$ ls
+
+Output:
+branch_file.txt  script.js  welcome.txt
+
+
+** the files are now on master **
+
+
+View the log:
+$ git log --oneline --graph --decorate
+
+Output:
+* 7c9d3e2 (HEAD -> master, GitNewBranch) Added branch_file.txt and script.js on GitNewBranch
+* 4b8e921 Added .gitignore to skip log files
+* a3f2b1c Adding welcome file
+
+
+** both master and GitNewBranch point to the same commit now **
+
+
+
+Delete the branch after merging
+-------------------------------
+
+$ git branch -d GitNewBranch
+
+Output:
+Deleted branch GitNewBranch (was 7c9d3e2).
+
+
+$ git branch
+
+Output:
+* master
+
+
+$ git status
+
+Output:
+On branch master
+nothing to commit, working tree clean
+
+
+
+Push changes to remote:
+$ git push origin master
+
+Output:
+Enumerating objects: 6, done.
+...
+To https://gitlab.com/vivek/GitDemo.git
+   4b8e921..7c9d3e2  master -> master
+
+
+
+** summary of commands used: **
+**   git branch <name>            - create branch **
+**   git branch                   - list local branches **
+**   git branch -a                - list all (incl remote) **
+**   git checkout <name>          - switch to branch **
+**   git checkout -b <name>       - create AND switch (shortcut) **
+**   git diff <a> <b>             - text diff **
+**   git difftool <a> <b>         - visual diff (P4Merge) **
+**   git merge <name>             - merge branch INTO current **
+**   git branch -d <name>         - delete branch (safe) **
+**   git branch -D <name>         - force delete (unmerged) **
+
+
+-- end --
